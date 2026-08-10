@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Untitled Sci-Fi Project</title>
+    <link rel="stylesheet" href="/src/ui/hud.css" />
+  </head>
+  <body>
+    <canvas id="viewport"></canvas>
+
+    <div id="hud" class="hidden">
+      <div id="crosshair"><span></span><span></span><span></span><span></span></div>
+      <div id="hitmarker"></div>
+      <div id="damage-vignette"></div>
+
+      <div id="hud-health">
+        <div class="stat-label">INTEGRITY</div>
+        <div class="stat-row">
+          <div id="health-value">100</div>
+          <div id="health-bar"><div id="health-fill"></div></div>
+        </div>
+      </div>
+
+      <div id="hud-ammo">
+        <div id="weapon-name">MK-IV</div>
+        <div class="stat-row">
+          <div id="ammo-mag">30</div>
+          <div id="ammo-reserve">/ 120</div>
+        </div>
+        <div id="reload-prompt" class="hidden">RELOADING</div>
+        <div id="weapon-slots"></div>
+      </div>
+
+      <div id="objective">
+        <div class="obj-head">
+          <span class="obj-chevron">▸</span>
+          <span id="obj-title">—</span>
+        </div>
+        <div class="obj-sub">
+          <span id="obj-detail"></span>
+          <span id="obj-progress"></span>
+        </div>
+      </div>
+
+      <div id="fps-counter">-- fps</div>
+
+      <div id="toasts"></div>
+    </div>
+
+    <div id="overlay">
+      <div id="overlay-grid"></div>
+      <div id="overlay-scan"></div>
+
+      <div id="overlay-inner">
+        <div id="overlay-tag">
+          <span class="tag-lead">DEVELOPED BY</span>
+          <span class="tag-studios">PURPLE PARK STUDIOS <i>×</i> LUMALIEN</span>
+        </div>
+        <h1>
+          <span class="title-line">OBSIDIAN</span>
+          <span class="title-line accent">PROTOCOL</span>
+        </h1>
+        <div id="overlay-rule"><i></i><span></span><i></i></div>
+        <p id="overlay-status">Loading…</p>
+
+        <button id="start-button" disabled>
+          <span class="btn-label">DEPLOY</span>
+          <span class="btn-glow"></span>
+        </button>
+
+        <div id="controls">
+          <div class="ctrl"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><em>move</em></div>
+          <div class="ctrl"><kbd>Shift</kbd><em>sprint</em></div>
+          <div class="ctrl"><kbd>LMB</kbd><em>fire</em></div>
+          <div class="ctrl"><kbd>R</kbd><em>reload</em></div>
+          <div class="ctrl"><kbd>Q</kbd><em>swap weapon</em></div>
+        </div>
+      </div>
+
+      <!-- Secondary bindings live down here so the menu reads as five things,
+           not nine. -->
+      <div id="overlay-foot">
+        <span>SPACE jump · CTRL crouch · ESC cursor · F3 debug</span>
+        <span class="foot-build">BUILD 0.1.0 · EARLY DEVELOPMENT</span>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

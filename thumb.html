@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Model thumbnailer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #14121c;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="module">
+      import * as THREE from 'three';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+      const params = new URLSearchParams(location.search);
+      const url = params.get('model');
+      const yaw = parseFloat(params.get('yaw') ?? '0.6');
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(512, 640);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      document.body.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x14121c);
+
+      const camera = new THREE.PerspectiveCamera(35, 512 / 640, 0.01, 100);
+
+      // Three-point studio lighting so both white and black models read.
+      const key = new THREE.DirectionalLight(0xffffff, 3.2);
+      key.position.set(2, 3, 3);
+      scene.add(key);
+      const fill = new THREE.DirectionalLight(0xa78bfa, 1.4);
+      fill.position.set(-3, 1, 1.5);
+      scene.add(fill);
+      const rim = new THREE.DirectionalLight(0xc4a6ff, 2.2);
+      rim.position.set(0, 2, -4);
+      scene.add(rim);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x404060, 0.9));
+
+      const loader = new GLTFLoader();
+      const gltf = await loader.loadAsync(url);
+      const model = gltf.scene;
+      scene.add(model);
+
+      // Frame the model regardless of its authored scale.
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const radius = Math.max(size.x, size.y, size.z) * 0.5;
+      const dist = radius / Math.tan((camera.fov * Math.PI) / 360) * 1.5;
+
+      model.rotation.y = yaw;
+      camera.position.set(
+        center.x + Math.sin(0.35) * dist,
+        center.y + radius * 0.35,
+        center.z + Math.cos(0.35) * dist,
+      );
+      camera.lookAt(center);
+
+      renderer.render(scene, camera);
+
+      window.__info = {
+        size: [size.x, size.y, size.z].map((v) => +v.toFixed(3)),
+        meshes: gltf.scene.children.length,
+        clips: gltf.animations.map((a) => a.name),
+      };
+      window.__ready = true;
+    </script>
+  </body>
+</html>

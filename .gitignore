@@ -1,0 +1,24 @@
+# Dependencies & build output
+node_modules/
+dist/
+
+# Source assets, not shipped assets.
+# `public/models/incoming/` holds the raw ~270MB Meshy exports and `mixamo/`
+# the FBX round-trip files. Both are inputs to the Blender pipeline; the
+# optimised GLBs in public/models/ are what the game actually loads.
+public/models/incoming/
+mixamo/
+
+# Blender auto-backups
+*.blend1
+*.blend2
+
+# Tooling output
+tools/shots/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
