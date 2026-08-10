@@ -2,6 +2,10 @@
 node_modules/
 dist/
 
+# Raw gunshot samples in the repo root; the encoded MP3s in public/audio/ are
+# what the game loads.
+/*.wav
+
 # Source assets, not shipped assets.
 # `public/models/incoming/` holds the raw ~270MB Meshy exports and `mixamo/`
 # the FBX round-trip files. Both are inputs to the Blender pipeline; the

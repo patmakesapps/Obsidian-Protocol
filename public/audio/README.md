@@ -23,8 +23,9 @@ own track uses it instead, looping alone:
 
 | File | Used for |
 | --- | --- |
-| `shoot_1/2.mp3` | Player weapon fire |
-| `enemy_shoot_1.mp3` | Hostile fire (allies reuse it pitched up) |
+| `shoot_1.mp3` | Player weapon fire (ESM Battle Game assault rifle one-shot) |
+| `enemy_shoot_1.mp3` | Hostile fire (Blastwave FX machine gun) |
+| `ally_shoot_1.mp3` | Friendly fire (Blastwave FX pistol, pitched up in code) |
 | `impact_1.mp3` | Bolt hitting a surface |
 | `explosion_1-4.mp3` | Drone / barrel explosions |
 | `enemy_death_1.mp3` | Enemy killed |
@@ -48,6 +49,5 @@ own track uses it instead, looping alone:
 | `footstep_1` | Footsteps (add `_2`/`_3` variants, they get pitch-jittered) |
 | `player_hurt_1` | Taking damage |
 | `hit_confirm_1` | Short tick when a body shot lands |
-| `ally_shoot_1` | Friendly fire sound (optional — falls back to pitched enemy clip) |
 | `objective_1` | New objective chime |
 | `objective_complete_1` | Objective complete fanfare |

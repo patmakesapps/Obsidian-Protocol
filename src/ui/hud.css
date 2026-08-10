@@ -440,9 +440,10 @@ body {
   position: absolute;
   top: 26px;
   padding: 12px 18px;
-  background: linear-gradient(180deg, rgba(12, 8, 24, 0.72), rgba(12, 8, 24, 0.42));
+  /* No backdrop-filter here: blurring over a live WebGL canvas forces a
+     read-back + re-blur every frame. A slightly denser plate reads the same. */
+  background: linear-gradient(180deg, rgba(12, 8, 24, 0.85), rgba(12, 8, 24, 0.58));
   border-top: 2px solid rgba(196, 166, 255, 0.75);
-  backdrop-filter: blur(3px);
 }
 
 #hud-health {
@@ -555,9 +556,8 @@ body {
   min-width: 300px;
   padding: 10px 22px 11px;
   text-align: center;
-  background: linear-gradient(180deg, rgba(12, 8, 24, 0.72), rgba(12, 8, 24, 0.34));
+  background: linear-gradient(180deg, rgba(12, 8, 24, 0.85), rgba(12, 8, 24, 0.5));
   border-top: 2px solid rgba(196, 166, 255, 0.65);
-  backdrop-filter: blur(3px);
   clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
 }
 

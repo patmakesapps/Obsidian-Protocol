@@ -8,7 +8,7 @@
 // playlist, played back-to-back on repeat.
 
 const MANIFEST = {
-  shoot: ['shoot_1', 'shoot_2'],
+  shoot: ['shoot_1'],
   enemy_shoot: ['enemy_shoot_1'],
   ally_shoot: ['ally_shoot_1'],
   impact: ['impact_1'],

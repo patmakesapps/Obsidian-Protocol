@@ -118,6 +118,13 @@ export class Loadout {
     // tracer fades on a just-holstered gun still resolve.
     for (const w of this.weapons) w.update(dt);
 
-    if (this.current) this.hud?.setAmmo(this.current.mag, this.current.reserve);
+    // Only push actual changes: rewriting the ammo DOM every frame keeps the
+    // HUD plate style-invalidated even when the count hasn't moved.
+    const w = this.current;
+    if (w && (w.mag !== this._hudMag || w.reserve !== this._hudReserve)) {
+      this._hudMag = w.mag;
+      this._hudReserve = w.reserve;
+      this.hud?.setAmmo(w.mag, w.reserve);
+    }
   }
 }

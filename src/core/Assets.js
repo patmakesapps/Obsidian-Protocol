@@ -49,12 +49,17 @@ export class Assets {
           if (node.isMesh) {
             node.castShadow = true;
             node.receiveShadow = true;
-            // Only skinned meshes opt out of culling — they're bounded by their
-            // bind pose, which an animated character routinely leaves, so they
-            // pop out at the screen edge. Static props have honest bounds, and
-            // disabling culling for all of them meant every structure in the
-            // level was submitted every frame regardless of where you looked.
-            node.frustumCulled = !node.isSkinnedMesh;
+            // Skinned meshes are bounded by their bind pose, which an animated
+            // character routinely leaves — but never by 2.5x its own radius.
+            // An inflated explicit sphere keeps culling honest without turning
+            // it off: with `frustumCulled = false` every character was
+            // submitted to both the camera and shadow passes every frame, no
+            // matter where you looked.
+            if (node.isSkinnedMesh) {
+              node.geometry.computeBoundingSphere();
+              node.boundingSphere = node.geometry.boundingSphere.clone();
+              node.boundingSphere.radius *= 2.5;
+            }
           }
         });
         this.onModelLoaded?.(gltf.scene);

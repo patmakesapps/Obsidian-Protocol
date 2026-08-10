@@ -72,10 +72,11 @@ export class Projectiles {
     }
 
     // Shared muzzle-flash lights. NPCs don't own lights individually — a pool
-    // of three covers any realistic number of simultaneous shooters and keeps
-    // the per-fragment lighting cost fixed.
+    // of two covers near-simultaneous shooters (a flash lives 0.06s) and keeps
+    // the per-fragment lighting cost fixed. Every extra pooled light is paid
+    // on every shaded fragment in the scene, so the pool stays minimal.
     this.flashes = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       const light = new THREE.PointLight(0xffd9a0, 0, 16, 2);
       scene.add(light);
       this.flashes.push({ light, life: 0 });
@@ -258,17 +259,16 @@ export class Projectiles {
 
   _updateLights() {
     // Intensity only — never `visible`. See the pool comment in the constructor.
-    const live = this.pool.filter((p) => p.active).slice(0, this.lights.length);
-    this.lights.forEach((light, i) => {
-      const p = live[i];
-      if (!p) {
-        light.intensity = 0;
-        return;
-      }
+    let li = 0;
+    for (const p of this.pool) {
+      if (li >= this.lights.length) break;
+      if (!p.active) continue;
+      const light = this.lights[li++];
       light.color.copy(p.mesh.material.color);
       light.intensity = 6;
       light.position.copy(p.position);
-    });
+    }
+    for (; li < this.lights.length; li++) this.lights[li].intensity = 0;
   }
 
   get activeCount() {

@@ -134,7 +134,11 @@ export function createSky(scene, presetName = 'arcology') {
   const sun = new THREE.DirectionalLight(preset.sunLight.color, preset.sunLight.intensity);
   sun.position.copy(sunDir).multiplyScalar(90);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  // 1024 over a 110m box is still ~9 texels/metre, and the frustum is
+  // texel-snapped to the player (Game._trackShadows) so the lower resolution
+  // reads as a slightly softer edge, not crawl. The full shadow pass re-renders
+  // every frame, so map size is paid continuously.
+  sun.shadow.mapSize.set(1024, 1024);
 
   // Tight frustum: only the play area immediately around the player needs
   // shadows, and a smaller box means far more texels per metre.

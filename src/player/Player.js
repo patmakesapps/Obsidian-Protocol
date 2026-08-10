@@ -76,6 +76,9 @@ export class Player {
     this._forward = new THREE.Vector3();
     this._right = new THREE.Vector3();
     this._wish = new THREE.Vector3();
+    this._eyePos = new THREE.Vector3();
+    this._horiz = new THREE.Vector3();
+    this._accelTarget = new THREE.Vector3();
   }
 
   get speedForStance() {
@@ -101,17 +104,13 @@ export class Player {
     return THREE.MathUtils.clamp(speed / CONFIG.player.sprintSpeed, 0, 1.4);
   }
 
+  /** Returns a shared scratch vector — read or copy it, don't hold it. */
   get eyePosition() {
-    return new THREE.Vector3(
+    return this._eyePos.set(
       this.position.x,
       this.position.y + this.height - CONFIG.player.eyeDrop,
       this.position.z,
     );
-  }
-
-  get lookDirection() {
-    const euler = new THREE.Euler(this.pitch + this.recoil.y, this.yaw + this.recoil.x, 0, 'YXZ');
-    return new THREE.Vector3(0, 0, -1).applyEuler(euler);
   }
 
   /**
@@ -297,7 +296,7 @@ export class Player {
 
   _applyAcceleration(dt) {
     const cfg = CONFIG.player;
-    const horiz = new THREE.Vector3(this.velocity.x, 0, this.velocity.z);
+    const horiz = this._horiz.set(this.velocity.x, 0, this.velocity.z);
 
     if (this.sliding) {
       // Low friction so the slide carries, and only weak steering authority so
@@ -313,7 +312,7 @@ export class Player {
 
     const maxSpeed = this.speedForStance;
     const accel = this.grounded ? cfg.groundAccel : cfg.airAccel;
-    const target = this._wish.clone().multiplyScalar(maxSpeed);
+    const target = this._accelTarget.copy(this._wish).multiplyScalar(maxSpeed);
 
     if (this._wish.lengthSq() > 0) {
       const delta = target.sub(horiz);

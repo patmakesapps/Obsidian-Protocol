@@ -36,6 +36,10 @@ export class Game {
     this.squads = [];
     this.pendingSpawns = [];
 
+    // Resolved before the renderer exists: the style decides whether the
+    // default framebuffer needs MSAA at all (see _setupRenderer).
+    this.style = resolveStyle();
+
     this._setupRenderer();
     this._setupScene();
   }
@@ -43,12 +47,19 @@ export class Game {
   _setupRenderer() {
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
-      antialias: true,
+      // With a post chain the scene renders into PostFX's target and the
+      // default framebuffer only ever receives a full-screen quad, so MSAA on
+      // it is allocated and resolved every frame for nothing — SMAA in the
+      // chain covers the edges instead.
+      antialias: !this.style.post,
       powerPreference: 'high-performance',
     });
     // A 4K display at devicePixelRatio 2 means shading 4x the pixels. 1.5 is
-    // visually near-identical and a large win on heavy scenes.
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    // visually near-identical and a large win on heavy scenes. The post chain
+    // runs ~7 full-resolution passes and already softens edges with SMAA and
+    // ink lines, so it gets a lower cap still — 1.25 is a further ~30% off the
+    // fill cost and very hard to spot.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.style.post ? 1.25 : 1.5));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -88,9 +99,8 @@ export class Game {
     this.hud = new HUD();
     this.input = new Input(this.canvas);
 
-    // Style is resolved before anything loads, because the material swap has to
-    // run on each GLB as it arrives rather than as a later sweep.
-    this.style = resolveStyle();
+    // The toon hook is installed before anything loads, because the material
+    // swap has to run on each GLB as it arrives rather than as a later sweep.
     if (this.style.toon) {
       this.assets.onModelLoaded = (root) => applyToon(root, this.style.toon.bands);
     }
@@ -509,7 +519,7 @@ export class Game {
       `look       yaw ${p.yaw.toFixed(2)} pitch ${p.pitch.toFixed(2)}`,
       `weapon     ${weapon ? weapon.def.id : 'none'}  ${weapon ? weapon.mag : 0}/${weapon ? weapon.reserve : 0}`,
       `actors     ${this.enemies.length} hostile  ${this.allies.length} allied  ${this.projectiles.activeCount} bolts`,
-      `lights     ${info.render.calls > 0 ? this._countLights() : '?'}`,
+      `lights     ${info.calls > 0 ? this._countLights() : '?'}`,
     ]);
   }
 

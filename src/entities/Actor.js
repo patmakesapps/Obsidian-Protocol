@@ -113,6 +113,17 @@ export class Actor {
     this._eye = new THREE.Vector3();
     this._targetEye = new THREE.Vector3();
     this._aim = new THREE.Vector3();
+    this._losDir = new THREE.Vector3();
+    this._steerDir = new THREE.Vector3();
+    this._goal = new THREE.Vector3();
+    this._side = new THREE.Vector3();
+
+    // Target acquisition and line-of-sight both raycast, and at 60Hz across
+    // every live actor those raycasts dominate the physics budget. Actors
+    // re-acquire at ~5Hz instead (slower still while dormant), staggered so a
+    // whole squad never re-acquires on the same tick.
+    this._canSee = false;
+    this._nextAcquireAt = Math.random() * 0.25;
     this._strafeBias = Math.random() < 0.5 ? -1 : 1;
     this._wanderPhase = Math.random() * Math.PI * 2;
 
@@ -199,13 +210,13 @@ export class Actor {
 
   hasLineOfSight(target) {
     if (!target) return false;
-    const from = this.eyePosition.clone();
+    const from = this.eyePosition;
     const to = this._targetEye.set(
       target.position.x,
       target.position.y + (target.height ?? 1.8) * 0.8,
       target.position.z,
     );
-    const dir = to.clone().sub(from);
+    const dir = this._losDir.subVectors(to, from);
     const distance = dir.length();
     if (distance < 0.001) return true;
     dir.divideScalar(distance);
@@ -295,9 +306,19 @@ export class Actor {
   fixedUpdate(dt) {
     if (this.isDead) return;
 
-    this.target = this.acquireTarget();
+    // Stale-by-200ms sight is invisible behind the telegraph wind-up and the
+    // turn rate; re-checking it every tick was most of the frame's raycasts.
+    if (this.time >= this._nextAcquireAt) {
+      this.target = this.acquireTarget();
+      this._canSee =
+        !!this.target &&
+        this.distanceTo(this.target) < this.cfg.sightRange &&
+        this.hasLineOfSight(this.target);
+      this._nextAcquireAt = this.time + (this.alerted ? 0.16 : 0.4) + Math.random() * 0.08;
+    }
     const distance = this.distanceTo(this.target);
-    const canSee = this.target && distance < this.cfg.sightRange && this.hasLineOfSight(this.target);
+    const canSee =
+      this._canSee && !(this.target?.isDead || this.target?.alive === false);
     if (canSee) this.lastSeenAt = this.time;
 
     this._chooseState(distance, canSee);
@@ -361,26 +382,26 @@ export class Actor {
       this._toTarget.subVectors(this.target.position, this.position);
       this._toTarget.y = 0;
       const dist = this._toTarget.length() || 1;
-      const dir = this._toTarget.clone().divideScalar(dist);
+      const dir = this._steerDir.copy(this._toTarget).divideScalar(dist);
 
       if (this.state === STATE.BACKPEDAL) {
-        goal = this.position.clone().addScaledVector(dir, -(cfg.tooCloseRange - dist + 2));
+        goal = this._goal.copy(this.position).addScaledVector(dir, -(cfg.tooCloseRange - dist + 2));
       } else if (this.state === STATE.ENGAGE) {
         // Hold near the preferred range and strafe, rather than walking in.
         const offset = dist - cfg.preferredRange;
-        const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(
+        const side = this._side.set(-dir.z, 0, dir.x).multiplyScalar(
           this._strafeBias * Math.sin(this.time * 0.8 + this._wanderPhase) * 4.5,
         );
-        goal = this.position.clone().addScaledVector(dir, offset).add(side);
+        goal = this._goal.copy(this.position).addScaledVector(dir, offset).add(side);
       } else if (this.state === STATE.MELEE) {
-        goal = this.position.clone();
+        goal = this._goal.copy(this.position);
       } else {
         // ADVANCE: head for a personal slot around the target, not the target
         // itself. Two dozen hostiles all steering at one identical point
         // converge into a scrum and jam each other well before they arrive —
         // which looks exactly like being stuck on scenery.
-        goal = this.target.position
-          .clone()
+        goal = this._goal
+          .copy(this.target.position)
           .addScaledVector(this._advanceSlot, Math.min(1, dist / 24));
       }
     }

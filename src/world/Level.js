@@ -167,6 +167,22 @@ export class Level {
       metalness: 0.35,
     });
 
+    // Two facade materials shared by every tower — a material per tower with
+    // cloned textures meant 55 materials and 110 GPU texture uploads for what
+    // is one look with two brightness tiers. The per-tower tiling that the
+    // clones carried in `map.repeat` is baked into each box's UVs instead.
+    const facadeMat = new THREE.MeshStandardMaterial({
+      color: PALETTE.white,
+      roughness: 0.5,
+      metalness: 0.12,
+      map: facade.map,
+      emissiveMap: facade.emissive,
+      emissive: new THREE.Color(PALETTE.purpleBright),
+      emissiveIntensity: 0.9,
+    });
+    const facadeMatBright = facadeMat.clone();
+    facadeMatBright.emissiveIntensity = 1.9;
+
     const group = new THREE.Group();
 
     for (let ix = 0; ix < cells; ix++) {
@@ -192,19 +208,14 @@ export class Level {
           const px = cx + ox;
           const pz = cz + oz;
 
-          const mat = new THREE.MeshStandardMaterial({
-            color: PALETTE.white,
-            roughness: 0.5,
-            metalness: 0.12,
-            map: facade.map.clone(),
-            emissiveMap: facade.emissive.clone(),
-            emissive: new THREE.Color(PALETTE.purpleBright),
-            emissiveIntensity: rand() < 0.25 ? 1.9 : 0.9,
-          });
-          mat.map.repeat.set(Math.max(1, Math.round(w / 6)), Math.max(2, Math.round(h / 4)));
-          mat.emissiveMap.repeat.copy(mat.map.repeat);
+          const bright = rand() < 0.25;
+          const towerGeo = new THREE.BoxGeometry(w, h, d);
+          const uv = towerGeo.attributes.uv;
+          const ru = Math.max(1, Math.round(w / 6));
+          const rv = Math.max(2, Math.round(h / 4));
+          for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * ru, uv.getY(i) * rv);
 
-          const tower = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+          const tower = new THREE.Mesh(towerGeo, bright ? facadeMatBright : facadeMat);
           tower.position.set(px, h / 2, pz);
           tower.castShadow = true;
           tower.receiveShadow = true;
