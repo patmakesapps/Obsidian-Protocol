@@ -2,6 +2,13 @@
  * DOM-based HUD. Kept out of the WebGL scene so text stays crisp at any
  * resolution and so restyling is a CSS change, not a shader change.
  */
+/**
+ * Aim blend at which the optic takes over and the weapon disappears. Shared
+ * with Weapon so the two swap on exactly the same frame — split them and you
+ * get either a floating gun over the reticle or a blank frame between the two.
+ */
+export const SCOPE_AT = 0.45;
+
 export class HUD {
   constructor() {
     this.root = document.getElementById('hud');
@@ -11,6 +18,9 @@ export class HUD {
     this.ammoReserve = document.getElementById('ammo-reserve');
     this.reloadPrompt = document.getElementById('reload-prompt');
     this.hitmarker = document.getElementById('hitmarker');
+    this.scope = document.getElementById('scope');
+    this.crosshair = document.getElementById('crosshair');
+    this._scoped = false;
     this.vignette = document.getElementById('damage-vignette');
     this.fpsCounter = document.getElementById('fps-counter');
 
@@ -27,6 +37,21 @@ export class HUD {
 
   setWeaponName(name) {
     if (this.weaponName) this.weaponName.textContent = name;
+  }
+
+  /**
+   * Raises or drops the optic. `blend` is the player's eased aim value; the
+   * overlay snaps in partway through so it never sits half-open, and CSS
+   * handles the short fade. Guarded on a change so this can be called every
+   * frame without touching the DOM.
+   */
+  setScope(blend) {
+    const on = blend > SCOPE_AT;
+    if (on === this._scoped) return;
+    this._scoped = on;
+    this.scope?.classList.toggle('on', on);
+    // The hip crosshair would otherwise sit on top of the reticle.
+    this.crosshair?.classList.toggle('hidden', on);
   }
 
   /** Rebuilds the slot strip. Called when weapons are gained or switched. */

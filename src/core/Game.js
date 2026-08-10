@@ -392,6 +392,7 @@ export class Game {
     this.player.update(dt, this.cameraRig);
     this.cameraRig.update(dt);
     this.loadout.update(dt, this.input);
+    this.hud.setScope(this.player.aimBlend);
     this.projectiles.update(dt);
     this.pickups.update(dt);
     this.objectives.update(dt);

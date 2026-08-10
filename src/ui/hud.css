@@ -55,6 +55,87 @@ body {
   transform: translate(-50%, -50%);
 }
 
+/* ------------------------------------------------------------------ scope */
+
+/* The optic is DOM rather than scene geometry on purpose: it stays pixel-crisp
+   at any resolution, costs nothing to render, and sits above the post chain so
+   the ink pass never draws an outline around the reticle. */
+#scope {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.09s linear;
+  pointer-events: none;
+  --scope-size: min(80vh, 80vw);
+}
+
+#scope.on {
+  opacity: 1;
+}
+
+/* One element, not four masking panels: an enormous spread shadow on a circle
+   paints out everything outside the aperture. */
+.scope-lens {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--scope-size);
+  height: var(--scope-size);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 100vmax rgba(5, 4, 10, 0.97),
+    inset 0 0 130px rgba(6, 4, 14, 0.9),
+    inset 0 0 0 2px rgba(196, 166, 255, 0.28);
+}
+
+.scope-reticle {
+  position: absolute;
+  inset: 0;
+}
+
+.scope-reticle i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(10, 8, 18, 0.9);
+}
+
+.ret-v {
+  width: 1px;
+  height: calc(var(--scope-size) * 0.42);
+}
+
+.ret-h {
+  height: 1px;
+  width: calc(var(--scope-size) * 0.42);
+}
+
+.ret-top {
+  transform: translate(-50%, calc(-100% - 15px));
+}
+
+.ret-bottom {
+  transform: translate(-50%, 15px);
+}
+
+.ret-left {
+  transform: translate(calc(-100% - 15px), -50%);
+}
+
+.ret-right {
+  transform: translate(15px, -50%);
+}
+
+.ret-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #c9a6ff;
+  box-shadow: 0 0 7px rgba(168, 110, 255, 0.9);
+  transform: translate(-50%, -50%);
+}
+
 #crosshair span {
   position: absolute;
   background: #c9a6ff;

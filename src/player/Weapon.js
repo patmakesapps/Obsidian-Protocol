@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, PALETTE } from '../config.js';
 import { getSoftParticleTexture } from '../core/textures.js';
+import { SCOPE_AT } from '../ui/HUD.js';
 
 const TRACER_POOL = 24;
 const SPARK_POOL = 12;
@@ -395,9 +396,20 @@ export class Weapon {
       : 0;
     const reloadDip = this.reloading ? Math.sin(THREE.MathUtils.clamp(reloadProgress, 0, 1) * Math.PI) * 0.14 : 0;
 
-    // Aiming pulls the weapon to the centre of the screen and damps the hand
-    // motion — sway and bob are scaled down rather than switched off, so the
-    // viewmodel doesn't freeze solid the instant the sight comes up.
+    // Scoped is an optic-only view: past the threshold the weapon is hidden
+    // entirely and the HUD overlay takes over. Hide the individual children
+    // rather than the group — the muzzle light hangs off the group, and hiding
+    // a light changes the scene's light count, which recompiles every shader
+    // in it (the same trap as the projectile light pools).
+    const scoped = this.player.aimBlend > SCOPE_AT;
+    for (const child of this.viewmodel.children) {
+      if (child !== this.muzzleFlash) child.visible = !scoped;
+    }
+
+    // Below the threshold the weapon is still rising toward the sight, so it
+    // keeps travelling to the aim pose — that's the transition you see before
+    // the optic opens. Sway and bob are scaled down rather than switched off,
+    // so it doesn't freeze solid on the way up.
     const aim = this.player.aimBlend;
     this._aimPose.lerpVectors(this.viewmodelBase, this.viewmodelAim, aim);
     const motion = THREE.MathUtils.lerp(1, 0.25, aim);

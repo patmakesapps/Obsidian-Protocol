@@ -14,6 +14,20 @@
       <div id="hitmarker"></div>
       <div id="damage-vignette"></div>
 
+      <!-- Full-screen optic. Sits early in #hud so the readouts below still
+           paint over it. Four reticle segments rather than two full lines,
+           which leaves the centre clear. -->
+      <div id="scope" aria-hidden="true">
+        <div class="scope-lens"></div>
+        <div class="scope-reticle">
+          <i class="ret-v ret-top"></i>
+          <i class="ret-v ret-bottom"></i>
+          <i class="ret-h ret-left"></i>
+          <i class="ret-h ret-right"></i>
+          <i class="ret-dot"></i>
+        </div>
+      </div>
+
       <div id="hud-health">
         <div class="stat-label">INTEGRITY</div>
         <div class="stat-row">
@@ -80,6 +94,7 @@
           <div class="ctrl"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><em>move</em></div>
           <div class="ctrl"><kbd>Shift</kbd><em>sprint</em></div>
           <div class="ctrl"><kbd>LMB</kbd><em>fire</em></div>
+          <div class="ctrl"><kbd>RMB</kbd><em>scope</em></div>
           <div class="ctrl"><kbd>R</kbd><em>reload</em></div>
           <div class="ctrl"><kbd>Q</kbd><em>swap weapon</em></div>
         </div>

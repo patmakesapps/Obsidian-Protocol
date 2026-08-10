@@ -48,6 +48,7 @@ and nothing the player fights on is more than a step high.
 | `Space` | Jump |
 | `Mouse` | Look |
 | `LMB` | Fire |
+| `RMB` | Scope (toggle — press again to drop it) |
 | `R` | Reload |
 | `Q` · `1` `2` · Wheel | Switch weapon |
 | `Esc` | Release cursor (pauses) |

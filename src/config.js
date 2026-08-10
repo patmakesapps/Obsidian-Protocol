@@ -147,18 +147,19 @@ export const CONFIG = {
     shakeOnHit: 0.06,
     shakeOnKill: 0.02,
 
-    // Aim mode (RMB). A toggle, not a hold: press to bring the weapon up,
-    // press again to drop it. Firing, reloading and swapping all work as
-    // normal while it's up.
-    aimFov: 44,
+    // Scope (RMB). A toggle, not a hold: press to raise the optic, press again
+    // to drop it. Firing, reloading and swapping all work as normal while it's
+    // up. The weapon is hidden entirely — the view through the scope is the
+    // whole presentation, so there are no iron sights to line up.
+    aimFov: 26,
     // How fast the transition runs, in blend units per second.
     aimSpeed: 7.0,
-    // Look sensitivity is scaled down with the FOV, otherwise a zoomed view
-    // feels like it whips around far faster than the hip view.
-    aimSensitivity: 0.55,
-    // Aiming rewards accuracy — this multiplies whatever spread the weapon
+    // Sensitivity scales with the zoom, otherwise a 26-degree view whips around
+    // at the same rate as a 78-degree one and is unusable.
+    aimSensitivity: 0.3,
+    // Scoped fire rewards accuracy — this multiplies whatever spread the weapon
     // would otherwise have, including the movement and airborne penalties.
-    aimSpread: 0.3,
+    aimSpread: 0.22,
   },
 
   // Hit feedback. Combat reads as weightless without this.
