@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Obsidian Protocol">
+  <!--
+    Deliberately three shapes and two colours. A favicon is read at 16px, where
+    anything finer than this turns to mush — the skewed bars echo the angular
+    clip-path motif used on the game's buttons and HUD panels.
+  -->
+  <defs>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e6dcff" />
+      <stop offset="0.55" stop-color="#c4a6ff" />
+      <stop offset="1" stop-color="#8b5cf6" />
+    </linearGradient>
+  </defs>
+
+  <rect width="32" height="32" rx="7" fill="#0d0d13" />
+  <path d="M14.5 5.5h9.5l-6 21h-9.5z" fill="url(#violet)" />
+  <path d="M8.5 5.5h4l-6 21h-4z" fill="#8b5cf6" opacity="0.6" />
+</svg>
