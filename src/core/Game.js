@@ -370,6 +370,7 @@ export class Game {
     if (this.running) return;
     this.running = true;
     this.started = true;
+    this.audio.levelId = this.levelDef.id;
     this.audio.resume();
     this.hud.show();
     this.input.requestLock();
@@ -379,6 +380,9 @@ export class Game {
 
   pause() {
     this.running = false;
+    // The frame loop drives setMovement, so once it stops nothing would ever
+    // silence a running movement loop under the pause menu.
+    this.audio?.setMovement?.(null);
     // Mission complete presents its own menu; without this the pause overlay
     // flashes up first and is immediately overwritten.
     if (this._suppressPauseUI) {
@@ -402,6 +406,7 @@ export class Game {
     const next = nextLevel(id);
     const unlocked = firstTime && next ? next : null;
 
+    this.audio?.victory();
     this.hud?.showToast(
       unlocked ? `NEW DEPLOYMENT ZONE — ${unlocked.name}` : 'SECTOR SECURED',
       0x6effc4,
@@ -466,6 +471,10 @@ export class Game {
     }
 
     this.hud.updateFps(dt);
+    if (this.input.wasPressed('KeyM')) {
+      const muted = this.audio.toggleMute();
+      this.hud.showToast(muted ? 'AUDIO MUTED' : 'AUDIO ON', muted ? 0xff7a6e : 0x6effc4);
+    }
     if (this.input.wasPressed('F3')) this._debug = !this._debug;
     if (this._debug) this._reportDebug();
     else if (this._debugWasOn) this.hud.setDebug(null);
@@ -559,6 +568,9 @@ export class Game {
   dispose() {
     this.running = false;
     window.removeEventListener('resize', this._onResize);
+    // The music loop outlives the frame loop otherwise — two levels in, two
+    // soundtracks are playing on top of each other.
+    this.audio?.dispose();
     this.input?.dispose();
     this.renderer.dispose();
   }

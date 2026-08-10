@@ -196,6 +196,10 @@ export class Player {
       this.audio.footstep();
       this._lastFootstep = this.time;
     }
+
+    // Looping movement bed rides on top of the one-shot footsteps: run while
+    // sprinting, walk otherwise, silent in the air, mid-slide or when dead.
+    this.audio?.setMovement?.(!this.alive || !moving ? null : this.isSprinting ? 'run' : 'walk');
   }
 
   fixedUpdate(dt) {

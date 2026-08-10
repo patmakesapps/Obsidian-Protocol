@@ -236,7 +236,7 @@ export class Pickups {
     if (item.type === TYPE.HEALTH) {
       const healed = this.player.heal(CONFIG.pickups.healthAmount);
       if (healed <= 0) return false; // already full — leave it for later
-      this.audio?.pickup();
+      this.audio?.pickup('health');
       this.hud?.showToast(`+${Math.round(healed)} INTEGRITY`, item.color);
       return true;
     }
