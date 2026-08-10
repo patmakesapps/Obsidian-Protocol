@@ -26,3 +26,6 @@ desktop.ini
 # Python bytecode from the Blender asset scripts
 __pycache__/
 *.pyc
+
+# Firebase deploy cache
+.firebase/
