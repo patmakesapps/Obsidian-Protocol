@@ -119,9 +119,16 @@ export class Weapon {
     this.muzzle.position.set(0, 0.012, -0.5);
     this.viewmodel.add(this.muzzle);
 
-    // Wide radius and high intensity: a muzzle flash should visibly light the
-    // walls and bodies around you, not just glow on the gun.
-    this.muzzleFlash = new THREE.PointLight(this.def.muzzleColor, 0, 18, 2);
+    // This light is parented to the viewmodel, which is parented to the camera,
+    // which is in the scene — so it lights the world as well as the gun. That
+    // makes a second world-space flash on every shot redundant.
+    const flash = CONFIG.feedback.muzzle;
+    this.muzzleFlash = new THREE.PointLight(
+      this.def.muzzleColor,
+      0,
+      flash.lightDistance,
+      2,
+    );
     this.muzzleFlash.position.copy(this.muzzle.position);
     this.viewmodel.add(this.muzzleFlash);
 
@@ -175,6 +182,10 @@ export class Weapon {
       if (n.isMesh) {
         n.castShadow = false;
         n.receiveShadow = false;
+        // The viewmodel sits centimetres from the near plane, where a bounding
+        // sphere straddling it makes culling unreliable. It's always on screen
+        // when visible, so testing it is pointless anyway.
+        n.frustumCulled = false;
       }
     });
 
@@ -226,9 +237,13 @@ export class Weapon {
     this._updateTracers(dt);
     this._updateSparks(dt);
 
-    this.muzzleFlash.intensity *= Math.max(0, 1 - dt * 26);
+    const decay = CONFIG.feedback.muzzle.decay;
+    this.muzzleFlash.intensity *= Math.max(0, 1 - dt * decay);
+    // Fully off rather than merely dim: a point light left at a fraction of a
+    // unit still costs a full lighting iteration on every fragment.
+    if (this.muzzleFlash.intensity < 0.05) this.muzzleFlash.intensity = 0;
     const fs = this.flashSprite.material;
-    fs.opacity = Math.max(0, fs.opacity - dt * 26);
+    fs.opacity = Math.max(0, fs.opacity - dt * decay);
     this.flashSprite.rotation.z += dt * 12;
   }
 
@@ -254,15 +269,18 @@ export class Weapon {
       def.recoilPitch * (0.75 + Math.random() * 0.5),
       (Math.random() - 0.5) * 2 * def.recoilYaw,
     );
-    this.muzzleFlash.intensity = 55;
-    this.flashSprite.material.opacity = 1;
-    this.flashSprite.scale.setScalar(1.3 + Math.random() * 0.9);
+    const flash = CONFIG.feedback.muzzle;
+    this.muzzleFlash.intensity = flash.lightIntensity;
+    this.flashSprite.material.opacity = flash.spriteOpacity;
+    this.flashSprite.scale.setScalar(
+      flash.spriteScaleMin + Math.random() * (flash.spriteScaleMax - flash.spriteScaleMin),
+    );
     this.flashSprite.rotation.z = Math.random() * Math.PI;
 
-    // Also throw a world-space flash so the environment lights up, not just
-    // the viewmodel, which is what makes firing feel like it has force.
-    this.muzzle.getWorldPosition(this._muzzleWorld);
-    this.projectiles?.flash(this._muzzleWorld, this.def.muzzleColor, 60);
+    // No separate world-space flash. The viewmodel's point light is already a
+    // scene light, so a second one was double-lighting every shot — which is
+    // most of why rapid fire washed the screen out, and it put a second live
+    // light in the forward-shading loop for the duration of every burst.
 
     this.audio?.shoot();
   }

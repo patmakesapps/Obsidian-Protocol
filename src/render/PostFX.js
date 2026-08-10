@@ -212,8 +212,12 @@ export class PostFX {
 
     const post = style.post;
 
+    // Bloom runs at half resolution. It is by far the most expensive thing in
+    // the chain — five mip levels, each a separable two-direction blur — and
+    // its output is a wide blur, so the lost detail is genuinely invisible
+    // while the fill cost drops roughly fourfold.
     this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(size.x, size.y),
+      new THREE.Vector2(size.x / 2, size.y / 2),
       post.bloom.strength,
       post.bloom.radius,
       post.bloom.threshold,
@@ -269,7 +273,7 @@ export class PostFX {
     this.sceneTarget.setSize(size.x, size.y);
     this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.composer.setSize(width, height);
-    this.bloomPass.setSize(size.x, size.y);
+    this.bloomPass.setSize(size.x / 2, size.y / 2);
     this._size.copy(size);
     this._updateTexel();
   }

@@ -56,12 +56,17 @@ export class Projectiles {
       });
     }
 
-    // A small number of dynamic lights follow the nearest live bolts; lighting
-    // every projectile would tank the frame rate for almost no visual gain.
+    // Every pooled light stays visible for the whole run, idling at intensity
+    // zero. This looks wasteful and is the opposite — three bakes the number of
+    // visible lights into every material's shader as a #define, and hiding a
+    // light drops it from that count. Toggling visibility as bolts spawn and
+    // die therefore forces a full shader recompile across the scene, several
+    // times a second during a firefight, which is exactly what a stutter under
+    // sustained fire looks like. A fixed five lights cost a small, steady
+    // amount; a fluctuating count costs recompiles.
     this.lights = [];
     for (let i = 0; i < LIGHT_POOL; i++) {
       const light = new THREE.PointLight(0xffffff, 0, 9, 2);
-      light.visible = false;
       scene.add(light);
       this.lights.push(light);
     }
@@ -72,7 +77,6 @@ export class Projectiles {
     this.flashes = [];
     for (let i = 0; i < 3; i++) {
       const light = new THREE.PointLight(0xffd9a0, 0, 16, 2);
-      light.visible = false;
       scene.add(light);
       this.flashes.push({ light, life: 0 });
     }
@@ -142,7 +146,6 @@ export class Projectiles {
     f.light.position.copy(position);
     f.light.color.setHex(color);
     f.light.intensity = intensity;
-    f.light.visible = true;
     f.life = 0.06;
   }
 
@@ -175,10 +178,7 @@ export class Projectiles {
       if (f.life <= 0) continue;
       f.life -= dt;
       f.light.intensity *= Math.max(0, 1 - dt * 22);
-      if (f.life <= 0) {
-        f.light.visible = false;
-        f.light.intensity = 0;
-      }
+      if (f.life <= 0) f.light.intensity = 0;
     }
   }
 
@@ -257,15 +257,14 @@ export class Projectiles {
   }
 
   _updateLights() {
+    // Intensity only — never `visible`. See the pool comment in the constructor.
     const live = this.pool.filter((p) => p.active).slice(0, this.lights.length);
     this.lights.forEach((light, i) => {
       const p = live[i];
       if (!p) {
-        light.visible = false;
         light.intensity = 0;
         return;
       }
-      light.visible = true;
       light.color.copy(p.mesh.material.color);
       light.intensity = 6;
       light.position.copy(p.position);

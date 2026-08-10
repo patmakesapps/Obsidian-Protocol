@@ -465,7 +465,11 @@ export class Game {
       if (this.allies[i].removed) this.allies.splice(i, 1);
     }
 
-    while (this.pendingSpawns.length && this.pendingSpawns[0].at <= this.elapsed) {
+    // One per frame, not all that are due. Every spawn skeleton-clones a
+    // character, builds its materials and creates a physics body; doing two or
+    // three in the same frame is a visible hitch, and nothing cares if the
+    // stragglers arrive a frame or two later.
+    if (this.pendingSpawns.length && this.pendingSpawns[0].at <= this.elapsed) {
       const job = this.pendingSpawns.shift();
       if (job.kind === 'enemy') this._spawnEnemy();
       else if (job.kind === 'drone') this._spawnDrone();

@@ -41,7 +41,9 @@ export const WEAPONS = {
     recoilPitch: 0.019,
     recoilYaw: 0.007,
     tracerColor: 0xc4a6ff,
-    muzzleColor: 0xd9c2ff,
+    // Saturated violet rather than near-white. The old value was so pale that
+    // at flash brightness it just read as white glare.
+    muzzleColor: 0xb488ff,
     // Extra yaw applied to the GLB. Set to Math.PI if the gun points backwards.
     modelYaw: 0,
     // Where the gun sits in the right hand bone's local space. Tune these three
@@ -83,7 +85,9 @@ export const WEAPONS = {
     recoilPitch: 0.048,
     recoilYaw: 0.013,
     tracerColor: 0xff9a3c,
-    muzzleColor: 0xffc98a,
+    // Purple like the vanguard's, a shade deeper. The tracers stay amber, so
+    // the two weapons still read differently downrange.
+    muzzleColor: 0xa878ff,
     modelYaw: 0,
     // First-person framing. `viewmodelOffset` is where the gun sits relative to
     // the camera; `viewmodelSlide` pushes it back along its own barrel so you
@@ -166,6 +170,20 @@ export const CONFIG = {
     // A bolt passing within this radius of the player's head cracks past them.
     whizzRadius: 2.2,
     whizzCooldown: 0.12,
+
+    // Player muzzle flash. Deliberately restrained: it sits a few centimetres
+    // from the near plane, so values that look punchy in isolation blow the
+    // whole frame out — especially under the comic style, where bloom runs
+    // before tone mapping and an additive white blob sails past its threshold.
+    muzzle: {
+      lightIntensity: 14,
+      lightDistance: 10,
+      spriteOpacity: 0.42,
+      spriteScaleMin: 0.75,
+      spriteScaleMax: 1.15,
+      // Higher decays faster. The flash should be gone before the next round.
+      decay: 34,
+    },
   },
 
   player: {

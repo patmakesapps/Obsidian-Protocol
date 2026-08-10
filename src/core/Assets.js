@@ -49,7 +49,12 @@ export class Assets {
           if (node.isMesh) {
             node.castShadow = true;
             node.receiveShadow = true;
-            node.frustumCulled = false; // skinned meshes cull badly on their bind pose
+            // Only skinned meshes opt out of culling — they're bounded by their
+            // bind pose, which an animated character routinely leaves, so they
+            // pop out at the screen edge. Static props have honest bounds, and
+            // disabling culling for all of them meant every structure in the
+            // level was submitted every frame regardless of where you looked.
+            node.frustumCulled = !node.isSkinnedMesh;
           }
         });
         this.onModelLoaded?.(gltf.scene);
