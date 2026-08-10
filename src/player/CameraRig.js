@@ -40,6 +40,15 @@ export class CameraRig {
   update(dt) {
     const cfg = CONFIG.camera;
 
+    // Zoom follows the player's aim blend. Only touch the projection matrix
+    // when the value actually moves — recomputing it every frame is wasted
+    // work once the transition has settled.
+    const wantedFov = THREE.MathUtils.lerp(cfg.fov, cfg.aimFov, this.player.aimBlend);
+    if (Math.abs(this.camera.fov - wantedFov) > 0.01) {
+      this.camera.fov = wantedFov;
+      this.camera.updateProjectionMatrix();
+    }
+
     const pitch = this.player.pitch + this.player.recoil.y;
     const yaw = this.player.yaw + this.player.recoil.x;
     this._euler.set(pitch, yaw, 0, 'YXZ');

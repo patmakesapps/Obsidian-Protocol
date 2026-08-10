@@ -22,3 +22,7 @@ tools/shots/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Python bytecode from the Blender asset scripts
+__pycache__/
+*.pyc

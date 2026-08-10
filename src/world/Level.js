@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, PALETTE } from '../config.js';
 import { makeRandom } from '../core/noise.js';
+import { scatter, place } from './props.js';
 
 const SEED = 90210;
 
@@ -27,6 +28,12 @@ export class Level {
     this.coverPoints = [];
     this.buildings = [];
     this._placedProps = [];
+
+    // Footprints of everything solid standing on the street. `isOpenGround`
+    // used to test the block grid only, so it happily called the inside of a
+    // barrier or a cargo pallet "open" — which is how actors ended up spawned
+    // inside scenery and then walking around inside it.
+    this._blockers = [];
   }
 
   get cellSize() {
@@ -38,14 +45,23 @@ export class Level {
     return 0;
   }
 
-  /** True when the point is on a street/plaza rather than inside a block. */
+  /** True when the point is on clear street/plaza — not in a block or a prop. */
   isOpenGround(x, z) {
     const half = CONFIG.world.citySize / 2;
     if (Math.abs(x) > half - 6 || Math.abs(z) > half - 6) return false;
+
     const localX = this._local(x);
     const localZ = this._local(z);
     const b = CONFIG.world.blockSize;
-    return localX >= b || localZ >= b || this._isPlazaBlock(x, z);
+    const onStreet = localX >= b || localZ >= b || this._isPlazaBlock(x, z);
+    if (!onStreet) return false;
+
+    for (const s of this._blockers) {
+      const dx = s.x - x;
+      const dz = s.z - z;
+      if (dx * dx + dz * dz < s.r * s.r) return false;
+    }
+    return true;
   }
 
   _local(v) {
@@ -350,6 +366,13 @@ export class Level {
         { type: 'cover' },
       );
       this.coverPoints.push(new THREE.Vector3(p.x, 0, p.z));
+      // Half the diagonal plus an actor's radius, so a spawn can't land close
+      // enough to a barrier for its capsule to be intersecting one.
+      this._blockers.push({
+        x: p.x,
+        z: p.z,
+        r: Math.hypot(p.w, p.d) / 2 + 0.8,
+      });
     });
 
     bodies.instanceMatrix.needsUpdate = true;
@@ -360,100 +383,105 @@ export class Level {
   // ------------------------------------------------------------------- props
 
   /**
-   * Places GLB props. Each is measured, scaled to a sensible real-world size,
-   * dropped so it sits on the ground, and given a collider from its bounds.
+   * Places GLB street furniture. Each def is sampled onto open street, then the
+   * whole set is drawn instanced — 130 props cost roughly as many draw calls as
+   * ten, which is what makes a dressed city affordable at all.
+   *
+   * targetSize is the prop's LONGEST dimension in metres. Scaling by a named
+   * axis is a trap: an exporter that normalises to ~1.9 on its own longest axis
+   * silently inflates the model many times over if you pick the wrong one —
+   * that's how the cruiser ended up 61 metres deep and swallowing the spawn.
    */
   async _placeProps() {
     if (!CONFIG.world.useGlbProps) return;
     const rand = makeRandom(SEED + 77);
 
-    // targetSize is the prop's LONGEST dimension in metres. Scaling by a named
-    // axis is a trap: Meshy normalises every export to ~1.9 on its own longest
-    // axis, so picking the wrong one silently inflates the model many times
-    // over — that's how the cruiser ended up 61 metres deep and swallowing the
-    // player spawn.
+    // The hero piece stays a one-off: it's unique, so instancing buys nothing.
+    const cruiser = await place(this.scene, this.assets, '/models/cruiser.glb', {
+      position: new THREE.Vector3(4, 0, -62),
+      rotationY: -0.42,
+      targetSize: 46,
+      sitOnGround: true,
+    });
+    if (cruiser) {
+      this.cruiser = cruiser.object;
+      this._addPropCollider(cruiser.box, '/models/cruiser.glb');
+      this._blockCircle(cruiser.box);
+    }
+
     const defs = [
-      { url: '/models/cruiser.glb', targetSize: 46, count: 1, hero: true },
-      { url: '/models/prop_tower.glb', targetSize: 9, count: 6 },
-      { url: '/models/prop_booth.glb', targetSize: 4.2, count: 8 },
-      { url: '/models/prop_wall_door.glb', targetSize: 9, count: 7 },
-      { url: '/models/prop_wall_low.glb', targetSize: 7, count: 10, cover: true },
-      { url: '/models/prop_barricade.glb', targetSize: 6, count: 12, cover: true },
-      { url: '/models/prop_barrier.glb', targetSize: 3.4, count: 14, cover: true },
-      { url: '/models/prop_cargo.glb', targetSize: 3.0, count: 20, cover: true },
-      { url: '/models/prop_beacon.glb', targetSize: 3.2, count: 12, glow: true },
+      { url: '/models/city/city_monument.glb', targetSize: 10, count: 4 },
+      { url: '/models/city/city_arch.glb', targetSize: 13, count: 8 },
+      { url: '/models/city/city_pylon.glb', targetSize: 9.5, count: 22 },
+      { url: '/models/city/city_kiosk.glb', targetSize: 3.6, count: 30 },
+      { url: '/models/city/city_bench.glb', targetSize: 3.0, count: 30 },
+      { url: '/models/city/city_planter.glb', targetSize: 3.4, count: 40, cover: true },
+      { url: '/models/city/city_barrier.glb', targetSize: 3.6, count: 48, cover: true },
+      { url: '/models/city/city_cargo.glb', targetSize: 2.8, count: 40, cover: true },
+      { url: '/models/city/city_generator.glb', targetSize: 3.2, count: 28, cover: true },
     ];
 
     for (const def of defs) {
-      const source = await this.assets.loadModel(def.url);
-      if (!source) continue;
-
+      const placements = [];
       for (let i = 0; i < def.count; i++) {
-        const instance = await this.assets.instantiate(def.url);
-        if (!instance) break;
-        const object = instance.scene;
+        const position = this._findOpenSpot(rand, def.targetSize * 0.6);
+        if (!position) break;
+        placements.push({
+          position,
+          // Mostly grid-aligned, with a little slop so the street doesn't read
+          // as machine-placed.
+          rotationY: Math.round(rand() * 4) * (Math.PI / 2) + (rand() - 0.5) * 0.25,
+        });
+      }
+      if (!placements.length) continue;
 
-        const box = new THREE.Box3().setFromObject(object);
-        const size = box.getSize(new THREE.Vector3());
-        const longest = Math.max(size.x, size.y, size.z);
-        object.scale.setScalar(def.targetSize / Math.max(0.001, longest));
-
-        let position;
-        if (def.hero) {
-          position = new THREE.Vector3(4, 0, -62);
-          object.rotation.y = -0.42;
-        } else {
-          position = this._findOpenSpot(rand, def.targetSize * 0.6);
-          if (!position) break;
-          object.rotation.y = Math.round(rand() * 4) * (Math.PI / 2) + (rand() - 0.5) * 0.25;
-        }
-
-        object.position.copy(position);
-        object.updateMatrixWorld(true);
-
-        // Re-measure after scale/rotation, then sit it exactly on the ground.
-        const placed = new THREE.Box3().setFromObject(object);
-        object.position.y -= placed.min.y;
-        object.updateMatrixWorld(true);
-
+      const result = await scatter(this.scene, this.assets, def.url, placements, {
+        targetSize: def.targetSize,
         // Only sizeable props earn a place in the shadow map; small street
         // clutter casting shadows costs a lot for almost no visual gain.
-        const castsShadow = def.targetSize >= 5;
-        object.traverse((n) => {
-          if (n.isMesh) {
-            n.castShadow = castsShadow;
-            n.receiveShadow = true;
-          }
-        });
-        const final = new THREE.Box3().setFromObject(object);
+        castShadow: def.targetSize >= 5,
+      });
+      if (!result) continue;
 
-        // Hard guard: nothing may enclose the player spawn. A prop that scales
-        // or rotates unexpectedly would otherwise trap the player inside a
-        // static collider with no way to move.
-        if (final.intersectsBox(Level.SPAWN_KEEPOUT)) {
-          console.warn(
-            `[Level] "${def.url}" overlapped the spawn keep-out and was skipped.`,
-            final.getSize(new THREE.Vector3()),
-          );
-          object.removeFromParent();
-          continue;
-        }
-
-        this.scene.add(object);
-
-        const fs = final.getSize(new THREE.Vector3());
-        const fc = final.getCenter(new THREE.Vector3());
-        this.physics.addStaticBox(
-          { x: fs.x / 2, y: fs.y / 2, z: fs.z / 2 },
-          { x: fc.x, y: fc.y, z: fc.z },
-          null,
-          { type: 'prop' },
-        );
-
-        if (def.cover) this.coverPoints.push(new THREE.Vector3(fc.x, 0, fc.z));
-        if (def.hero) this.cruiser = object;
-      }
+      result.boxes.forEach((box, i) => {
+        if (!this._addPropCollider(box, def.url)) return;
+        this._blockCircle(box);
+        if (def.cover) this.coverPoints.push(placements[i].position.clone());
+      });
     }
+  }
+
+  /** Marks a prop's footprint as not-open-ground, so nothing spawns inside it. */
+  _blockCircle(box) {
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    this._blockers.push({
+      x: centre.x,
+      z: centre.z,
+      r: Math.hypot(size.x, size.z) / 2 + 0.8,
+    });
+  }
+
+  /**
+   * Hard guard: nothing may enclose the player spawn. A prop that scales or
+   * rotates unexpectedly would otherwise trap the player inside a static
+   * collider with no way to move.
+   * @returns true when a collider was actually added.
+   */
+  _addPropCollider(box, url) {
+    if (box.intersectsBox(Level.SPAWN_KEEPOUT)) {
+      console.warn(`[Level] "${url}" overlapped the spawn keep-out — no collider added.`);
+      return false;
+    }
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    this.physics.addStaticBox(
+      { x: size.x / 2, y: size.y / 2, z: size.z / 2 },
+      { x: centre.x, y: centre.y, z: centre.z },
+      null,
+      { type: 'prop' },
+    );
+    return true;
   }
 
   /** Rejection-samples a street position with clearance from other props. */

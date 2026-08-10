@@ -53,28 +53,22 @@ export class Pickups {
       label = WEAPONS[payload.weaponId]?.name ?? 'WEAPON';
     }
 
+    // Every pickup body is a GLB fitted to a fixed size and re-centred on its
+    // own bounds, so the hover and spin animate around the visual centre
+    // regardless of where the artist put the origin.
+    let modelUrl = null;
+    let modelSize = cfg.modelSize;
     if (type === TYPE.WEAPON) {
-      const def = WEAPONS[payload.weaponId];
-      const instance = def ? await this.assets.instantiate(def.model) : null;
-      if (instance) {
-        const gun = instance.scene;
-        const box = new THREE.Box3().setFromObject(gun);
-        const size = box.getSize(new THREE.Vector3());
-        const longest = Math.max(size.x, size.y, size.z);
-        gun.scale.setScalar(0.95 / Math.max(0.001, longest));
-        gun.updateMatrixWorld(true);
-        const centred = new THREE.Box3().setFromObject(gun);
-        gun.position.sub(centred.getCenter(new THREE.Vector3()));
-        gun.traverse((n) => {
-          if (n.isMesh) n.castShadow = true;
-        });
-        root.add(gun);
-      } else {
-        root.add(this._buildCrate(color));
-      }
-    } else {
-      root.add(this._buildCrate(color));
+      modelUrl = WEAPONS[payload.weaponId]?.model ?? null;
+      modelSize = 0.95;
+    } else if (type === TYPE.HEALTH) {
+      modelUrl = cfg.healthModel;
+    } else if (type === TYPE.AMMO) {
+      modelUrl = cfg.ammoModel;
     }
+
+    const body = modelUrl ? await this._buildModel(modelUrl, modelSize) : null;
+    root.add(body ?? this._buildCrate(color));
 
     // Ground ring. Deliberately NOT additive: the plaza is near-white, and
     // additive blending over white saturates to white — invisible exactly
@@ -127,7 +121,27 @@ export class Pickups {
     return item;
   }
 
-  /** Dark shell with glowing bands — reads against the white plaza. */
+  /** Loads a GLB, fits it to `size` metres, and centres it. Null if missing. */
+  async _buildModel(url, size) {
+    const instance = await this.assets.instantiate(url);
+    if (!instance) return null;
+
+    const object = instance.scene;
+    const bounds = new THREE.Box3().setFromObject(object);
+    const extent = bounds.getSize(new THREE.Vector3());
+    const longest = Math.max(extent.x, extent.y, extent.z);
+    object.scale.setScalar(size / Math.max(0.001, longest));
+    object.updateMatrixWorld(true);
+
+    const centred = new THREE.Box3().setFromObject(object);
+    object.position.sub(centred.getCenter(new THREE.Vector3()));
+    object.traverse((n) => {
+      if (n.isMesh) n.castShadow = true;
+    });
+    return object;
+  }
+
+  /** Fallback shell with glowing bands, used when a pickup GLB is missing. */
   _buildCrate(color) {
     const group = new THREE.Group();
     const shell = new THREE.Mesh(

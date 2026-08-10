@@ -37,6 +37,10 @@ export class Weapon {
 
     this.viewmodel = new THREE.Group();
     this.viewmodelBase = new THREE.Vector3().fromArray(def.viewmodelOffset ?? [0.24, -0.19, -0.30]);
+    // Where the weapon sits with the sight up. Centred on X so it lines up with
+    // the crosshair, and pushed forward so the optic fills more of the frame.
+    this.viewmodelAim = new THREE.Vector3().fromArray(def.viewmodelAim ?? [0, -0.075, -0.20]);
+    this._aimPose = new THREE.Vector3();
     this.viewmodel.position.copy(this.viewmodelBase);
     this.viewmodel.visible = false;
     this.camera.add(this.viewmodel);
@@ -202,6 +206,9 @@ export class Weapon {
     let spread = THREE.MathUtils.lerp(def.spreadHip, def.spreadMoving, moveFactor);
     if (this.player.isCrouching) spread *= 0.55;
     if (!this.player.grounded) spread *= 1.8;
+    // Applied last so aiming tightens the final figure, including the movement
+    // and airborne penalties rather than being overridden by them.
+    spread *= THREE.MathUtils.lerp(1, CONFIG.camera.aimSpread, this.player.aimBlend);
     return spread;
   }
 
@@ -370,15 +377,22 @@ export class Weapon {
       : 0;
     const reloadDip = this.reloading ? Math.sin(THREE.MathUtils.clamp(reloadProgress, 0, 1) * Math.PI) * 0.14 : 0;
 
+    // Aiming pulls the weapon to the centre of the screen and damps the hand
+    // motion — sway and bob are scaled down rather than switched off, so the
+    // viewmodel doesn't freeze solid the instant the sight comes up.
+    const aim = this.player.aimBlend;
+    this._aimPose.lerpVectors(this.viewmodelBase, this.viewmodelAim, aim);
+    const motion = THREE.MathUtils.lerp(1, 0.25, aim);
+
     this.viewmodel.position.set(
-      this.viewmodelBase.x + this.sway.x + bobX,
-      this.viewmodelBase.y + this.sway.y + bobY - this._lower * 0.09 - reloadDip,
-      this.viewmodelBase.z + this.kick * 0.09,
+      this._aimPose.x + (this.sway.x + bobX) * motion,
+      this._aimPose.y + (this.sway.y + bobY) * motion - this._lower * 0.09 - reloadDip,
+      this._aimPose.z + this.kick * 0.09,
     );
     this.viewmodel.rotation.set(
-      -this.sway.y * 1.4 + this.kick * 0.22 - reloadDip * 2.2,
-      -this.sway.x * 1.4 + this._lower * 0.5,
-      this._lower * 0.35 + this.sway.x * 0.8,
+      (-this.sway.y * 1.4) * motion + this.kick * 0.22 - reloadDip * 2.2,
+      (-this.sway.x * 1.4) * motion + this._lower * 0.5,
+      (this._lower * 0.35 + this.sway.x * 0.8) * motion,
     );
   }
 

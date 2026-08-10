@@ -6,7 +6,17 @@ export class Input {
     this.canvas = canvas;
     this.keys = new Set();
     this.pressedThisFrame = new Set();
-    this.mouse = { dx: 0, dy: 0, left: false, right: false, leftPressed: false, wheel: 0 };
+    this.mouse = {
+      dx: 0,
+      dy: 0,
+      left: false,
+      right: false,
+      leftPressed: false,
+      // Edge-triggered, because aim is a toggle rather than a hold — a held
+      // flag would re-fire the toggle on every frame the button is down.
+      rightPressed: false,
+      wheel: 0,
+    };
     this.locked = false;
 
     this._onWheel = (e) => {
@@ -37,7 +47,10 @@ export class Input {
         this.mouse.left = true;
         this.mouse.leftPressed = true;
       }
-      if (e.button === 2) this.mouse.right = true;
+      if (e.button === 2) {
+        this.mouse.right = true;
+        this.mouse.rightPressed = true;
+      }
     };
     this._onMouseUp = (e) => {
       if (e.button === 0) this.mouse.left = false;
@@ -82,6 +95,7 @@ export class Input {
     this.mouse.dx = 0;
     this.mouse.dy = 0;
     this.mouse.leftPressed = false;
+    this.mouse.rightPressed = false;
     this.mouse.wheel = 0;
   }
 

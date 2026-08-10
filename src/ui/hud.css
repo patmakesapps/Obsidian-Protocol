@@ -564,6 +564,58 @@ body {
   text-indent: 0.36em;
 }
 
+/* Level picker. Choosing one reloads the page with ?level= rather than
+   rebuilding in place: the Game has no teardown path, and a fresh load is both
+   simpler and guaranteed clean. */
+#level-select {
+  margin: 0 0 34px;
+  pointer-events: auto;
+}
+
+.ls-label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 10px;
+  letter-spacing: 0.36em;
+  text-indent: 0.36em;
+  color: rgba(214, 205, 245, 0.42);
+}
+
+#level-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.level-option {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  padding: 11px 22px;
+  color: rgba(214, 205, 245, 0.62);
+  background: rgba(139, 92, 246, 0.07);
+  border: 1px solid rgba(196, 166, 255, 0.2);
+  cursor: pointer;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+
+.level-option:hover {
+  color: #f0eaff;
+  border-color: rgba(196, 166, 255, 0.5);
+  background: rgba(139, 92, 246, 0.16);
+}
+
+.level-option[aria-current='true'] {
+  color: #0b0616;
+  background: linear-gradient(135deg, #c4a6ff, #8b5cf6);
+  border-color: #d9c6ff;
+  cursor: default;
+}
+
 #start-button {
   position: relative;
   pointer-events: auto;

@@ -40,6 +40,11 @@ export class Player {
     this.lastDamageTime = -99;
     this.alive = true;
 
+    // Aim mode: `aiming` is the toggle state, `aimBlend` the eased 0-1 value
+    // everything else reads. See _updateAim.
+    this.aiming = false;
+    this.aimBlend = 0;
+
     this.bobPhase = 0;
     this.bobAmount = 0;
     this.cameraBobOffset = new THREE.Vector3();
@@ -88,14 +93,35 @@ export class Player {
     return new THREE.Vector3(0, 0, -1).applyEuler(euler);
   }
 
+  /**
+   * Aim toggle. `aiming` is the intent; `aimBlend` is the eased 0-1 value that
+   * FOV, sensitivity, spread and the viewmodel pose all read, so none of them
+   * snap.
+   */
+  _updateAim(dt) {
+    if (!this.alive) this.aiming = false;
+    else if (this.input.locked && this.input.mouse.rightPressed) this.aiming = !this.aiming;
+
+    const target = this.aiming ? 1 : 0;
+    const rate = CONFIG.camera.aimSpeed * dt;
+    this.aimBlend += THREE.MathUtils.clamp(target - this.aimBlend, -rate, rate);
+  }
+
   /** Mouse look and presentation run per rendered frame for smoothness. */
   update(dt, cameraRig) {
     const cfg = CONFIG.player;
     this.time += dt;
 
+    this._updateAim(dt);
+
     if (this.alive && this.input.locked) {
-      this.yaw -= this.input.mouse.dx * cfg.mouseSensitivity;
-      this.pitch -= this.input.mouse.dy * cfg.mouseSensitivity;
+      // Sensitivity tracks the zoom, so the view doesn't whip around when the
+      // FOV narrows.
+      const sensitivity =
+        cfg.mouseSensitivity *
+        THREE.MathUtils.lerp(1, CONFIG.camera.aimSensitivity, this.aimBlend);
+      this.yaw -= this.input.mouse.dx * sensitivity;
+      this.pitch -= this.input.mouse.dy * sensitivity;
       const limit = cameraRig?.pitchLimit ?? cfg.pitchLimit;
       this.pitch = THREE.MathUtils.clamp(this.pitch, -limit, limit);
     }

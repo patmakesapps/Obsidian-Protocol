@@ -5,7 +5,10 @@ import { Input } from './Input.js';
 import { Assets } from './Assets.js';
 import { Audio } from './Audio.js';
 import { createSky } from '../world/Sky.js';
-import { Level } from '../world/Level.js';
+import { resolveLevel } from '../world/levels.js';
+import { resolveStyle } from '../render/styles.js';
+import { applyToon } from '../render/toon.js';
+import { PostFX } from '../render/PostFX.js';
 import { Player } from '../player/Player.js';
 import { CameraRig } from '../player/CameraRig.js';
 import { Weapon } from '../player/Weapon.js';
@@ -56,6 +59,7 @@ export class Game {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
+      this.postFx?.setSize(window.innerWidth, window.innerHeight);
     };
     window.addEventListener('resize', this._onResize);
   }
@@ -83,9 +87,17 @@ export class Game {
     this.hud = new HUD();
     this.input = new Input(this.canvas);
 
-    onProgress('BUILDING CITY');
-    this.sky = createSky(this.scene);
-    this.level = new Level(this.scene, this.physics, this.assets);
+    // Style is resolved before anything loads, because the material swap has to
+    // run on each GLB as it arrives rather than as a later sweep.
+    this.style = resolveStyle();
+    if (this.style.toon) {
+      this.assets.onModelLoaded = (root) => applyToon(root, this.style.toon.bands);
+    }
+
+    this.levelDef = resolveLevel();
+    onProgress(this.levelDef.loadingLabel);
+    this.sky = createSky(this.scene, this.levelDef.sky);
+    this.level = new this.levelDef.Level(this.scene, this.physics, this.assets);
     await this.level.build();
 
     onProgress('DEPLOYING OPERATIVE');
@@ -158,6 +170,11 @@ export class Game {
     });
     this.objectives.start();
 
+    // Second sweep for everything built procedurally during load — level
+    // geometry, cover, street furniture — which never went through Assets.
+    if (this.style.toon) applyToon(this.scene, this.style.toon.bands);
+    if (this.style.post) this.postFx = new PostFX(this.renderer, this.style);
+
     this.hud.setHealth(this.player.health, CONFIG.player.maxHealth);
 
     this.input.onLockChange = (locked) => {
@@ -167,7 +184,7 @@ export class Game {
     // Render one frame so the world is visible behind the start overlay.
     this.player.update(0.016, this.cameraRig);
     this.cameraRig.update(0.016);
-    this.renderer.render(this.scene, this.camera);
+    this._render();
 
     return this;
   }
@@ -208,10 +225,7 @@ export class Game {
       const squad = [];
 
       for (let i = 0; i < size; i++) {
-        const spread = cfg.squadSpread;
-        const at = anchor.clone().add(
-          new THREE.Vector3((this.rand() - 0.5) * spread, 0, (this.rand() - 0.5) * spread),
-        );
+        const at = this._scatterAround(anchor, cfg.squadSpread);
         const enemy = await this._spawnEnemy(0, at);
         enemy.squad = squad;
         // Vary standoff distance within a squad so they don't stack up on one
@@ -270,11 +284,18 @@ export class Game {
 
   async _spawnAlly(slot) {
     const angle = Math.PI + (slot - 1) * 0.7;
-    const point = new THREE.Vector3(
+    let point = new THREE.Vector3(
       this.player.position.x + Math.sin(angle) * 5,
       0,
       this.player.position.z + Math.cos(angle) * 5,
     );
+    // Allies respawn relative to wherever the player currently is, which is
+    // often pressed up against cover — so the fixed formation offset needs the
+    // same open-ground check as everything else.
+    if (!this.level.isOpenGround(point.x, point.z)) {
+      const here = new THREE.Vector3(this.player.position.x, 0, this.player.position.z);
+      point = this._scatterAround(here, 9);
+    }
     const ally = new Ally({
       scene: this.scene,
       physics: this.physics,
@@ -292,6 +313,26 @@ export class Game {
     };
     this.allies.push(ally);
     return ally;
+  }
+
+  /**
+   * A point near `anchor` that is still on open ground.
+   *
+   * The anchor comes from the level's own spawn list so it's known-good, but
+   * offsetting a squad member by several metres from it is not: a street is
+   * only 18 m wide, so an unchecked ±4.5 m nudge routinely put hostiles inside
+   * a tower or a prop, where they then walked around inside the geometry.
+   */
+  _scatterAround(anchor, spread) {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const candidate = anchor
+        .clone()
+        .add(new THREE.Vector3((this.rand() - 0.5) * spread, 0, (this.rand() - 0.5) * spread));
+      if (this.level.isOpenGround(candidate.x, candidate.z)) return candidate;
+    }
+    // Stacking the whole squad on one valid point is survivable; spawning any
+    // of them inside a wall is not.
+    return anchor.clone();
   }
 
   _pickSpawnPoint(minDistance) {
@@ -347,6 +388,7 @@ export class Game {
       for (const ally of this.allies) ally.fixedUpdate(step);
     });
 
+    this.level.update?.(dt);
     this.player.update(dt, this.cameraRig);
     this.cameraRig.update(dt);
     this.loadout.update(dt, this.input);
@@ -371,19 +413,27 @@ export class Game {
     else if (this._debugWasOn) this.hud.setDebug(null);
     this._debugWasOn = this._debug;
 
-    this.renderer.render(this.scene, this.camera);
+    this._render();
     this.input.endFrame();
   };
+
+  /** Straight to the screen, or through the style's post chain if there is one. */
+  _render() {
+    if (this.postFx) this.postFx.render(this.scene, this.camera);
+    else this.renderer.render(this.scene, this.camera);
+  }
 
   _reportDebug() {
     const p = this.player;
     const rig = this.cameraRig;
-    const info = this.renderer.info;
+    // With a post chain active renderer.info describes the last full-screen
+    // quad, so use the snapshot taken right after the scene render instead.
+    const info = this.postFx?.sceneStats ?? this.renderer.info.render;
     const weapon = this.loadout.current;
     const fmt = (v) => v.toFixed(2).padStart(7);
 
     this.hud.setDebug([
-      `fps        ${this.hud.lastFps}   draws ${info.render.calls}  tris ${(info.render.triangles / 1000).toFixed(0)}k`,
+      `fps        ${this.hud.lastFps}   draws ${info.calls}  tris ${(info.triangles / 1000).toFixed(0)}k`,
       `player     x${fmt(p.position.x)} y${fmt(p.position.y)} z${fmt(p.position.z)}`,
       `velocity   x${fmt(p.velocity.x)} y${fmt(p.velocity.y)} z${fmt(p.velocity.z)}`,
       `grounded   ${p.grounded}   height ${p.height.toFixed(2)}  alive ${p.alive}`,

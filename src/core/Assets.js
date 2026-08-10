@@ -16,6 +16,19 @@ export class Assets {
     draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
     this.loader.setDRACOLoader(draco);
     this.cache = new Map();
+
+    /**
+     * Optional hook run once per loaded GLB, before it's cached.
+     *
+     * The active visual style uses this to swap materials. It has to happen
+     * here rather than on the live scene: props are instanced straight from
+     * the cached gltf's materials, and characters are skeleton-cloned from it
+     * on every spawn, so the cached original is the only place a change
+     * reaches all of them.
+     *
+     * @type {((root: import('three').Object3D) => void)|null}
+     */
+    this.onModelLoaded = null;
   }
 
   /** Resolves to the raw gltf, or null if the file is missing (non-fatal). */
@@ -39,6 +52,7 @@ export class Assets {
             node.frustumCulled = false; // skinned meshes cull badly on their bind pose
           }
         });
+        this.onModelLoaded?.(gltf.scene);
         return gltf;
       } catch (err) {
         console.warn(`[Assets] could not load "${url}" — falling back to placeholder.`, err);

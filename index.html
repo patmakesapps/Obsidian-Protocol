@@ -64,6 +64,13 @@
         <div id="overlay-rule"><i></i><span></span><i></i></div>
         <p id="overlay-status">Loading…</p>
 
+        <!-- Populated from the level registry in src/world/levels.js, so a new
+             level needs no markup change. -->
+        <div id="level-select" class="hidden">
+          <span class="ls-label">DEPLOYMENT ZONE</span>
+          <div id="level-options"></div>
+        </div>
+
         <button id="start-button" disabled>
           <span class="btn-label">DEPLOY</span>
           <span class="btn-glow"></span>

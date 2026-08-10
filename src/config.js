@@ -52,6 +52,10 @@ export const WEAPONS = {
     // see the front of the weapon rather than the whole thing.
     viewmodelOffset: [0.25, -0.23, -0.5],
     viewmodelSlide: 0.16,
+    // Sight-up pose (RMB). X and Y put the optic on the crosshair and are
+    // independent of Z — the sight line only depends on the model's own offset
+    // within the group. Z alone controls how much of the frame the gun fills.
+    viewmodelAim: [0, -0.085, -0.72],
     // Third-person hold. `yaw`/`pitch` are relative to the character's facing,
     // not the hand bone, so they're intuitive to tune: yaw swings the barrel
     // left/right, pitch tips it up/down. `position` is a nudge in hand space.
@@ -86,6 +90,10 @@ export const WEAPONS = {
     // see the front of the weapon rather than the whole thing.
     viewmodelOffset: [0.25, -0.23, -0.5],
     viewmodelSlide: 0.16,
+    // Sight-up pose (RMB). X and Y put the optic on the crosshair and are
+    // independent of Z — the sight line only depends on the model's own offset
+    // within the group. Z alone controls how much of the frame the gun fills.
+    viewmodelAim: [0, -0.085, -0.72],
     // Third-person hold. `yaw`/`pitch` are relative to the character's facing,
     // not the hand bone, so they're intuitive to tune: yaw swings the barrel
     // left/right, pitch tips it up/down. `position` is a nudge in hand space.
@@ -99,17 +107,31 @@ export const WEAPONS = {
 };
 
 export const CONFIG = {
+  // Which visual style boots. Ids come from src/render/styles.js; override per
+  // load with `?style=clean` in the URL to A/B against the plain renderer.
+  render: {
+    style: 'comic',
+  },
+
   world: {
     gravity: -24,
+
+    // Which level boots. Override per-load with `?level=basin` in the URL.
+    // Ids come from src/world/levels.js.
+    level: 'basin',
+
+    // Arcology (city) layout.
     citySize: 430,
     blockSize: 44,
     streetWidth: 18,
-    fogColor: 0xb9b0e2,
-    fogDensity: 0.0038,
-    // The imported Meshy props read as gritty industrial clutter against the
-    // clean white towers, so they're off. Flip to true to bring them back —
-    // the placement code is intact.
-    useGlbProps: false,
+    // Street props. The original imported Meshy set read as gritty industrial
+    // salvage against clean white towers; the current set is modelled from the
+    // same palette as the architecture, so these are on.
+    useGlbProps: true,
+
+    // Verdant Basin (jungle) layout: radius of the flat, walkable floor.
+    // Everything outside it is cliff and backdrop.
+    basinRadius: 170,
   },
 
   // First person only. Third person is gone: it needed a camera-collision
@@ -120,6 +142,19 @@ export const CONFIG = {
     shakeDecay: 8.0,
     shakeOnHit: 0.06,
     shakeOnKill: 0.02,
+
+    // Aim mode (RMB). A toggle, not a hold: press to bring the weapon up,
+    // press again to drop it. Firing, reloading and swapping all work as
+    // normal while it's up.
+    aimFov: 44,
+    // How fast the transition runs, in blend units per second.
+    aimSpeed: 7.0,
+    // Look sensitivity is scaled down with the FOV, otherwise a zoomed view
+    // feels like it whips around far faster than the hip view.
+    aimSensitivity: 0.55,
+    // Aiming rewards accuracy — this multiplies whatever spread the weapon
+    // would otherwise have, including the movement and airborne penalties.
+    aimSpread: 0.3,
   },
 
   // Hit feedback. Combat reads as weightless without this.
@@ -258,6 +293,12 @@ export const CONFIG = {
   },
 
   pickups: {
+    // Modelled crates. If a file is missing the runtime falls back to the
+    // procedural box, so the game still runs with an empty models directory.
+    ammoModel: '/models/pickup_ammo.glb',
+    healthModel: '/models/pickup_health.glb',
+    modelSize: 0.85, // longest dimension in metres
+
     // Ammo/health crates appear near the player when they're actually needed,
     // rather than littering the map from the start.
     lowAmmoFraction: 0.35,

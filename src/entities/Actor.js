@@ -11,6 +11,19 @@ export const STATE = {
   DEAD: 'dead',
 };
 
+// Obstacle sidestep tuning. An actor achieving less than BLOCK_RATIO of the
+// movement it asked for is being obstructed; once that has held for BLOCK_TIME
+// it steers AVOID_ANGLE off its goal for AVOID_TIME before trying again.
+// The angle is past 90 degrees on purpose — at exactly 90 an actor slides along
+// a flat face forever without ever getting round the end of it.
+const BLOCK_RATIO = 0.45;
+const BLOCK_TIME = 0.2;
+const AVOID_TIME = 1.5;
+const AVOID_ANGLE = (105 * Math.PI) / 180;
+// Getting re-blocked within this long of a sidestep ending means that side
+// didn't work, so try the other one next time.
+const AVOID_RETRY = 0.7;
+
 /**
  * Shared behaviour for every walking combatant — enemies and allies alike.
  *
@@ -102,6 +115,25 @@ export class Actor {
     this._aim = new THREE.Vector3();
     this._strafeBias = Math.random() < 0.5 ? -1 : 1;
     this._wanderPhase = Math.random() * Math.PI * 2;
+
+    // Obstacle sidestep. There is no navmesh — actors steer straight at their
+    // goal — so anything between them and it (a trunk, a boulder, a squadmate)
+    // means walking on the spot forever. These track how long movement has been
+    // obstructed and which way to peel off when it has been too long.
+    this._blockedFor = 0;
+    this._avoidUntil = -99;
+    this._avoidSign = this._strafeBias;
+
+    // A fixed personal offset around the target while advancing, so a whole
+    // squad approaches as a spread rather than a single-file queue. Scaled down
+    // as they close in, so it never pushes anyone out of firing range.
+    const slotAngle = Math.random() * Math.PI * 2;
+    const slotRange = 4 + Math.random() * 5;
+    this._advanceSlot = new THREE.Vector3(
+      Math.cos(slotAngle) * slotRange,
+      0,
+      Math.sin(slotAngle) * slotRange,
+    );
   }
 
   /**
@@ -343,7 +375,13 @@ export class Actor {
       } else if (this.state === STATE.MELEE) {
         goal = this.position.clone();
       } else {
-        goal = this.target.position.clone();
+        // ADVANCE: head for a personal slot around the target, not the target
+        // itself. Two dozen hostiles all steering at one identical point
+        // converge into a scrum and jam each other well before they arrive —
+        // which looks exactly like being stuck on scenery.
+        goal = this.target.position
+          .clone()
+          .addScaledVector(this._advanceSlot, Math.min(1, dist / 24));
       }
     }
 
@@ -358,7 +396,22 @@ export class Actor {
 
     const speed =
       this.state === STATE.ADVANCE || distance > 12 ? cfg.sprintSpeed : cfg.speed;
-    this._desired.divideScalar(distance).multiplyScalar(speed);
+    this._desired.divideScalar(distance);
+
+    // Peel off around whatever is in the way. Rotating the heading rather than
+    // adding a sideways nudge matters: a nudge still points most of the actor's
+    // speed into the obstacle, so it keeps grinding against it.
+    if (this.time < this._avoidUntil) {
+      const angle = AVOID_ANGLE * this._avoidSign;
+      const sin = Math.sin(angle);
+      const cos = Math.cos(angle);
+      const x = this._desired.x;
+      const z = this._desired.z;
+      this._desired.x = x * cos - z * sin;
+      this._desired.z = x * sin + z * cos;
+    }
+
+    this._desired.multiplyScalar(speed);
 
     // Ease toward the wanted velocity so direction changes aren't instant.
     this.velocity.x = THREE.MathUtils.damp(this.velocity.x, this._desired.x, 8, dt);
@@ -383,6 +436,8 @@ export class Actor {
     const moved = this.controller.computedMovement();
     this.grounded = this.controller.computedGrounded();
 
+    this._trackBlockage(dt, desired, moved);
+
     this.position.x += moved.x;
     this.position.y += moved.y;
     this.position.z += moved.z;
@@ -392,6 +447,43 @@ export class Actor {
       y: this.position.y + this.height / 2,
       z: this.position.z,
     });
+  }
+
+  /**
+   * Detects "running on the spot" and schedules a sidestep.
+   *
+   * The character controller already slides along surfaces, so a glancing hit
+   * resolves itself. What doesn't resolve is walking square into something:
+   * the slide direction is perpendicular to the desired one, movement drops to
+   * near zero, and the actor stays there for as long as it wants to reach a
+   * goal on the far side. Comparing wanted against achieved horizontal
+   * movement catches that without needing to know what was hit.
+   */
+  _trackBlockage(dt, desired, moved) {
+    const wanted = Math.hypot(desired.x, desired.z);
+    if (wanted < 1e-4) {
+      this._blockedFor = 0;
+      return;
+    }
+
+    const achieved = Math.hypot(moved.x, moved.z);
+    if (achieved / wanted < BLOCK_RATIO) {
+      this._blockedFor += dt;
+    } else {
+      // Decay rather than reset: shuffling past an obstacle in fits and starts
+      // should still eventually count as stuck.
+      this._blockedFor = Math.max(0, this._blockedFor - dt * 2);
+    }
+
+    if (this._blockedFor > BLOCK_TIME && this.time >= this._avoidUntil) {
+      // Commit to one side and keep it. Flipping on every trigger makes actors
+      // ping-pong left-right against the same obstacle and travel nowhere —
+      // measurably worse than not sidestepping at all. Only reverse when a
+      // manoeuvre has just ended and we're immediately stuck again.
+      if (this.time - this._avoidUntil < AVOID_RETRY) this._avoidSign = -this._avoidSign;
+      this._avoidUntil = this.time + AVOID_TIME + Math.random() * 0.5;
+      this._blockedFor = 0;
+    }
   }
 
   // ------------------------------------------------------------------ combat

@@ -1,7 +1,7 @@
 # Obsidian Protocol
 
-A first-person sci-fi shooter set in a bright white arcology under a violet sky.
-Built with Three.js and Rapier, running in the browser.
+A first-person sci-fi shooter. Built with Three.js and Rapier, running in the
+browser.
 
 **Purple Park Studios × Lumalien**
 
@@ -14,6 +14,29 @@ npm install
 npm run dev      # http://127.0.0.1:5173
 npm run build    # production build to dist/
 ```
+
+## Levels
+
+| id | Name | |
+| --- | --- | --- |
+| `arcology` | Obsidian Arcology | White towers on a block grid under a violet night sky |
+| `basin` | Verdant Basin | An overgrown research outpost in a jungle canyon |
+
+Pick one from **DEPLOYMENT ZONE** on the start screen — also reachable from the
+pause menu, so you can switch without restarting the session. `CONFIG.world.level`
+sets the default and `?level=arcology` overrides it per load.
+
+A level is any class with `build()`, `heightAt()`, `isOpenGround()` and
+`randomSpawnPoint()`, plus optional `update(dt)`, registered in
+`src/world/levels.js` alongside its sky preset. The picker builds itself from
+that registry, so adding a level needs no markup or UI change. Atmosphere is
+per-level data in `src/world/Sky.js`, not global config.
+
+**Both levels are dead flat.** That is a constraint, not a style choice: the AI
+has no navmesh and steers in straight lines, so real terrain would strand
+hostiles on geometry they can't path around. All of Verdant Basin's verticality
+is scenery — habitat discs on piers, a cliff ring outside the boundary wall —
+and nothing the player fights on is more than a step high.
 
 ## Controls
 
@@ -55,8 +78,10 @@ src/
   combat/            pooled projectiles and impacts
   items/             pickups
   game/              objectives
+  world/             levels, sky presets, prop instancing
   ui/                DOM HUD
-tools/               GLB inspection, thumbnails, headless smoke test
+tools/               GLB inspection, screenshots, headless smoke test
+tools/blender/       procedural asset generation (see public/models/README.md)
 public/models/       optimised GLB assets the game loads
 ```
 
@@ -66,7 +91,20 @@ through the systems.
 
 ## Asset pipeline
 
-Characters are generated in Meshy, auto-rigged in Mixamo, then merged and
+Two separate pipelines, for two deliberately different looks.
+
+**The environment is procedural.** Every prop, structure and plant is generated
+by Python in `tools/blender/` and exported as untextured, flat-shaded GLB. The
+whole set is ~11k triangles across 28 files, scattered with `InstancedMesh`, so a
+level holding 700+ props costs about 40 draw calls. Changing the art direction is
+an edit to `tools/blender/kit.py` and a re-run — the GLBs are build output, not
+source. See `public/models/README.md`.
+
+The flat shading is a gameplay decision. Characters are the only textured,
+smooth-shaded things in the frame, so an enemy standing against the treeline
+never visually merges into it.
+
+**Characters** are generated in Meshy, auto-rigged in Mixamo, then merged and
 optimised in Blender before export. Two things that pipeline handles which are
 easy to get wrong:
 
@@ -88,13 +126,19 @@ they're inputs, not shipped assets.
 ```bash
 node tools/inspect-glb.mjs public/models/enemy.glb   # rig, clips, bounds, textures
 node tools/dump-nodes.mjs  public/models/ally.glb    # node hierarchy & transforms
-node tools/thumbnails.mjs  public/models             # render previews (needs dev server)
-node tools/verify.mjs                                # headless smoke test (needs dev server)
+node tools/shoot.mjs basin                           # screenshot a level (needs dev server)
 ```
+
+`shoot.mjs` renders through SwiftShader, so the fps it reports means nothing —
+the draw-call and triangle counts it prints are the numbers to watch.
 
 ## Status
 
-Early development. Known gaps: no navmesh (AI steers in straight lines, which
-is fine on the current flat city but won't survive real terrain), no death
-animations (bodies use a procedural topple), and the environment is a
-placeholder for a more developed art direction.
+Early development. Known gaps:
+
+- **No navmesh.** AI steers in straight lines, which is why both levels are
+  flat. Terrain is blocked on this.
+- **No death animations** — bodies use a procedural topple.
+- **Characters dominate the frame budget.** The whole environment is ~11k
+  triangles; a populated level renders ~930k, essentially all of it the ~35
+  Meshy characters. They're the thing to optimise next, not the world.
