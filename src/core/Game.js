@@ -5,7 +5,8 @@ import { Input } from './Input.js';
 import { Assets } from './Assets.js';
 import { Audio } from './Audio.js';
 import { createSky } from '../world/Sky.js';
-import { resolveLevel } from '../world/levels.js';
+import { resolveLevel, nextLevel } from '../world/levels.js';
+import { markComplete } from '../game/progress.js';
 import { resolveStyle } from '../render/styles.js';
 import { applyToon } from '../render/toon.js';
 import { PostFX } from '../render/PostFX.js';
@@ -17,7 +18,7 @@ import { Projectiles } from '../combat/Projectiles.js';
 import { Enemy, Ally, Drone } from '../entities/Combatants.js';
 import { Pickups } from '../items/Pickups.js';
 import { Objectives } from '../game/Objectives.js';
-import { HUD } from '../ui/HUD.js';
+import { HUD, SCORE } from '../ui/HUD.js';
 import { makeRandom } from './noise.js';
 
 export class Game {
@@ -255,6 +256,7 @@ export class Game {
     });
     enemy.onDeath = (a) => {
       this.pickups?.dropWeapon(a);
+      this._scoreKill(a, SCORE.kill);
       this.objectives?.notifyKill();
       this.pendingSpawns.push({ at: this.elapsed + 8 + this.rand() * 8, kind: 'enemy' });
     };
@@ -274,7 +276,8 @@ export class Game {
       position: point,
       model: await this.assets.instantiate(CONFIG.drone.model),
     });
-    drone.onDeath = () => {
+    drone.onDeath = (a) => {
+      this._scoreKill(a, SCORE.droneKill, 'DRONE DOWN');
       this.objectives?.notifyKill();
       this.pendingSpawns.push({ at: this.elapsed + 14 + this.rand() * 10, kind: 'drone' });
     };
@@ -313,6 +316,21 @@ export class Game {
     };
     this.allies.push(ally);
     return ally;
+  }
+
+  /**
+   * Awards points and pops the callout for a kill.
+   *
+   * Only kills the player actually landed score — an ally finishing someone
+   * off, or a hostile walking into a friendly bolt, shouldn't pay out.
+   */
+  _scoreKill(actor, basePoints, label = 'ELIMINATED') {
+    if (!actor?.killedByPlayer) return;
+    const headshot = !!actor.lastHitWasHeadshot;
+    const points = headshot ? SCORE.headshotKill : basePoints;
+    this.hud?.addScore(points);
+    this.hud?.showKill({ headshot, label });
+    this.cameraRig?.addShake(CONFIG.camera.shakeOnKill);
   }
 
   /**
@@ -361,8 +379,46 @@ export class Game {
 
   pause() {
     this.running = false;
+    // Mission complete presents its own menu; without this the pause overlay
+    // flashes up first and is immediately overwritten.
+    if (this._suppressPauseUI) {
+      this._suppressPauseUI = false;
+      return;
+    }
     this.onPause?.();
   }
+
+  /**
+   * Called by Objectives when the last objective clears.
+   *
+   * Records the completion, works out whether that unlocked anything, and hands
+   * the result to the shell to present. The game keeps running underneath —
+   * the player is dropped out of pointer lock so they can use the menu, but the
+   * world is still there if they choose to stay and keep fighting.
+   */
+  onMissionComplete = () => {
+    const id = this.levelDef.id;
+    const firstTime = markComplete(id);
+    const next = nextLevel(id);
+    const unlocked = firstTime && next ? next : null;
+
+    this.hud?.showToast(
+      unlocked ? `NEW DEPLOYMENT ZONE — ${unlocked.name}` : 'SECTOR SECURED',
+      0x6effc4,
+    );
+
+    this.missionComplete = { level: this.levelDef, next, unlocked, score: this.hud?.score ?? 0 };
+    // A beat before the menu, so the last kill and the toast land first.
+    setTimeout(() => {
+      if (!this.running) return;
+      this._suppressPauseUI = true;
+      this.pause();
+      // Hand the cursor back so the menu is clickable. Nothing re-grabs it —
+      // the player has to press a button.
+      if (document.pointerLockElement) document.exitPointerLock();
+      this.onMissionCompleteUI?.(this.missionComplete);
+    }, 1800);
+  };
 
   resume() {
     if (this.running) return;
@@ -393,6 +449,7 @@ export class Game {
     this.cameraRig.update(dt);
     this.loadout.update(dt, this.input);
     this.hud.setScope(this.player.aimBlend);
+    this.hud.updateDamageNumbers(dt, this.camera);
     this.projectiles.update(dt);
     this.pickups.update(dt);
     this.objectives.update(dt);

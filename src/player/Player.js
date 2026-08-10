@@ -51,6 +51,17 @@ export class Player {
     this.strafeRoll = 0;
     this._lastFootstep = 0;
 
+    // Slide state. `sliding` gates the movement rules; `slideDip` and
+    // `landingDip` are presentation offsets the camera rig reads.
+    this.sliding = false;
+    this.slideTime = 0;
+    this.slideDip = 0;
+    this.landingDip = 0;
+    this._lastSlideAt = -99;
+    this._wasGrounded = true;
+    this._landingSpeed = 0;
+    this._slideDir = new THREE.Vector3();
+
     const rig = physics.addCharacter(
       { x: spawn.x, y: spawn.y + this.height / 2, z: spawn.z },
       CONFIG.player.radius,
@@ -70,14 +81,24 @@ export class Player {
   get speedForStance() {
     const cfg = CONFIG.player;
     if (this.isCrouching) return cfg.crouchSpeed;
-    if (this.input.isDown('ShiftLeft') || this.input.isDown('ShiftRight')) {
-      if (this.input.isDown('KeyW')) return cfg.sprintSpeed;
-    }
+    if (this.isSprinting) return cfg.sprintSpeed;
     return cfg.walkSpeed;
+  }
+
+  get isSprinting() {
+    if (this.isCrouching || this.sliding) return false;
+    if (!this.input.isDown('ShiftLeft') && !this.input.isDown('ShiftRight')) return false;
+    return this.input.isDown('KeyW');
   }
 
   get isCrouching() {
     return this.input.isDown('ControlLeft') || this.input.isDown('KeyC');
+  }
+
+  /** 0-1, how close to full sprint speed the player is actually moving. */
+  get speedFraction() {
+    const speed = Math.hypot(this.velocity.x, this.velocity.z);
+    return THREE.MathUtils.clamp(speed / CONFIG.player.sprintSpeed, 0, 1.4);
   }
 
   get eyePosition() {
@@ -140,8 +161,20 @@ export class Player {
   }
 
   _updatePresentation(dt, cameraRig) {
+    const cfg = CONFIG.player;
     const horizontalSpeed = Math.hypot(this.velocity.x, this.velocity.z);
-    const moving = this.grounded && horizontalSpeed > 0.5;
+    // A slide isn't a walk cycle, so it doesn't drive head bob or footsteps.
+    const moving = this.grounded && horizontalSpeed > 0.5 && !this.sliding;
+
+    // Camera dips the rig reads. Slide drops fast and recovers gently; landing
+    // is a one-shot that only ever decays.
+    this.slideDip = THREE.MathUtils.damp(
+      this.slideDip,
+      this.sliding ? cfg.slideCameraDip : 0,
+      this.sliding ? 16 : 7,
+      dt,
+    );
+    this.landingDip = THREE.MathUtils.damp(this.landingDip, 0, 9, dt);
 
     const targetBob = moving
       ? THREE.MathUtils.clamp(horizontalSpeed / CONFIG.player.sprintSpeed, 0, 1)
@@ -167,11 +200,72 @@ export class Player {
 
   fixedUpdate(dt) {
     if (!this.alive) return;
+    this._updateSlide(dt);
     this._updateStance(dt);
     this._buildWishDirection();
     this._applyAcceleration(dt);
     this._applyGravityAndJump(dt);
     this._move(dt);
+    this._trackLanding();
+  }
+
+  /**
+   * Sprint + crouch starts a slide.
+   *
+   * The slide keeps its own velocity and bleeds it off with a much lower
+   * friction than normal ground movement, so it carries. It ends when speed
+   * drops to a crouch-walk, when the timer runs out, or when crouch is
+   * released — whichever comes first.
+   */
+  _updateSlide(dt) {
+    const cfg = CONFIG.player;
+
+    if (this.sliding) {
+      this.slideTime += dt;
+      const speed = Math.hypot(this.velocity.x, this.velocity.z);
+      const ended =
+        !this.isCrouching ||
+        !this.grounded ||
+        speed < cfg.slideMinSpeed ||
+        this.slideTime > cfg.slideMaxTime;
+
+      if (ended) {
+        this.sliding = false;
+        this._lastSlideAt = this.time;
+      }
+      return;
+    }
+
+    // Entry needs real speed, not just the sprint keys held — sliding out of a
+    // standing start would be a free crouch-dash.
+    const canSlide =
+      this.grounded &&
+      this.isCrouching &&
+      this.time - this._lastSlideAt > cfg.slideCooldown &&
+      Math.hypot(this.velocity.x, this.velocity.z) > cfg.walkSpeed * 1.05;
+
+    if (!canSlide) return;
+
+    this.sliding = true;
+    this.slideTime = 0;
+
+    // Kick along the current heading rather than the input direction, so the
+    // slide continues where you were already going.
+    this._slideDir.set(this.velocity.x, 0, this.velocity.z).normalize();
+    this.velocity.x = this._slideDir.x * cfg.slideSpeed;
+    this.velocity.z = this._slideDir.z * cfg.slideSpeed;
+    this.audio?.footstep?.();
+  }
+
+  /** Camera dip on a hard landing, read by the camera rig. */
+  _trackLanding() {
+    if (this.grounded && !this._wasGrounded) {
+      const impact = THREE.MathUtils.clamp(-this._landingSpeed / 14, 0, 1);
+      this.landingDip = Math.max(this.landingDip, impact * CONFIG.player.landingDip);
+    }
+    // Sampled before the controller zeroes it on contact.
+    if (!this.grounded) this._landingSpeed = this.velocity.y;
+    this._wasGrounded = this.grounded;
   }
 
   _updateStance(dt) {
@@ -199,10 +293,23 @@ export class Player {
 
   _applyAcceleration(dt) {
     const cfg = CONFIG.player;
+    const horiz = new THREE.Vector3(this.velocity.x, 0, this.velocity.z);
+
+    if (this.sliding) {
+      // Low friction so the slide carries, and only weak steering authority so
+      // it commits you to a line instead of being a faster way to walk.
+      const speed = horiz.length();
+      const drop = cfg.slideFriction * dt;
+      if (speed > 0) horiz.multiplyScalar(Math.max(0, speed - drop) / speed);
+      if (this._wish.lengthSq() > 0) horiz.addScaledVector(this._wish, cfg.slideSteer * dt);
+      this.velocity.x = horiz.x;
+      this.velocity.z = horiz.z;
+      return;
+    }
+
     const maxSpeed = this.speedForStance;
     const accel = this.grounded ? cfg.groundAccel : cfg.airAccel;
     const target = this._wish.clone().multiplyScalar(maxSpeed);
-    const horiz = new THREE.Vector3(this.velocity.x, 0, this.velocity.z);
 
     if (this._wish.lengthSq() > 0) {
       const delta = target.sub(horiz);

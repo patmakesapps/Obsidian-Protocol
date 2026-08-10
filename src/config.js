@@ -120,9 +120,10 @@ export const CONFIG = {
   world: {
     gravity: -24,
 
-    // Which level boots. Override per-load with `?level=basin` in the URL.
-    // Ids come from src/world/levels.js.
-    level: 'basin',
+    // Where the campaign starts. Later levels unlock by completing this one —
+    // see `requires` in src/world/levels.js. `?level=` in the URL overrides it,
+    // but still can't open a locked level.
+    level: 'arcology',
 
     // Arcology (city) layout.
     citySize: 430,
@@ -203,6 +204,25 @@ export const CONFIG = {
     jumpSpeed: 8.0,
     coyoteTime: 0.12,
     jumpBuffer: 0.14,
+
+    // Slide: crouch while sprinting. Boosts to `slideSpeed`, then bleeds off
+    // under its own friction until it's no faster than a crouch-walk, at which
+    // point it ends. Steering during it is limited, so it commits you to a
+    // direction — that's what makes it a decision rather than a free speed
+    // buff you'd hold down permanently.
+    slideSpeed: 12.5,
+    slideFriction: 4.2,
+    slideMinSpeed: 4.0,
+    slideMaxTime: 1.3,
+    slideSteer: 2.6, // lateral accel while sliding, vs groundAccel of 55
+    slideCooldown: 0.55,
+    slideCameraDip: 0.28,
+
+    // Extra field of view at full sprint, in degrees. Costs nothing and does
+    // most of the work of making sprinting feel fast.
+    sprintFov: 7,
+    // Camera drop on a hard landing, scaled by impact speed.
+    landingDip: 0.16,
 
     maxSlopeClimbAngle: (50 * Math.PI) / 180,
     minSlopeSlideAngle: (38 * Math.PI) / 180,

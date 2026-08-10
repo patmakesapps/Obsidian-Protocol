@@ -1,6 +1,7 @@
 import { Level } from './Level.js';
 import { JungleLevel } from './JungleLevel.js';
 import { CONFIG } from '../config.js';
+import { isUnlocked } from '../game/progress.js';
 
 /**
  * Level registry.
@@ -9,6 +10,9 @@ import { CONFIG } from '../config.js';
  * `build()`, `heightAt(x, z)`, `isOpenGround(x, z)` and `randomSpawnPoint(rand)`,
  * plus optional `update(dt)` for anything animated. Everything else — layout,
  * props, atmosphere — is the level's own business.
+ *
+ * `requires` chains the campaign: a level stays locked until the level it names
+ * has been completed. `order` is only for display.
  */
 export const LEVELS = {
   arcology: {
@@ -17,6 +21,8 @@ export const LEVELS = {
     Level,
     sky: 'arcology',
     loadingLabel: 'BUILDING CITY',
+    order: 0,
+    requires: null,
   },
   basin: {
     id: 'basin',
@@ -24,23 +30,45 @@ export const LEVELS = {
     Level: JungleLevel,
     sky: 'basin',
     loadingLabel: 'SEEDING THE BASIN',
+    order: 1,
+    requires: 'arcology',
   },
 };
 
+/** Registry order, for menus. */
+export function levelList() {
+  return Object.values(LEVELS).sort((a, b) => a.order - b.order);
+}
+
+/** The level that follows `id` in campaign order, or null if it's the last. */
+export function nextLevel(id) {
+  const ordered = levelList();
+  const index = ordered.findIndex((l) => l.id === id);
+  if (index < 0) return null;
+  return ordered[index + 1] ?? null;
+}
+
 /**
  * Chooses the level: `?level=basin` in the URL wins, then the config default.
- * The query string is there so a level can be linked to and reloaded into
- * directly without touching config, which is how testing actually happens.
+ * A locked level is refused whichever way it was asked for — otherwise the
+ * query string is a one-line bypass of the whole campaign.
  */
 export function resolveLevel() {
   let requested = null;
   if (typeof window !== 'undefined') {
     requested = new URLSearchParams(window.location.search).get('level');
   }
+
   const id = requested ?? CONFIG.world.level;
-  if (!LEVELS[id]) {
+  const level = LEVELS[id];
+
+  if (!level) {
     console.warn(`[levels] unknown level "${id}" — falling back to "${CONFIG.world.level}".`);
     return LEVELS[CONFIG.world.level] ?? LEVELS.arcology;
   }
-  return LEVELS[id];
+  if (!isUnlocked(level)) {
+    console.info(`[levels] "${id}" is locked — starting the campaign instead.`);
+    return levelList()[0];
+  }
+  return level;
 }

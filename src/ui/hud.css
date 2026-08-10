@@ -55,6 +55,209 @@ body {
   transform: translate(-50%, -50%);
 }
 
+/* --------------------------------------------------- damage numbers ----- */
+
+#damage-numbers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Positioned by script each frame from a projected world point. `will-change`
+   keeps them on the compositor so a burst of numbers doesn't cause layout. */
+.dmg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  text-shadow:
+    0 2px 0 rgba(10, 6, 24, 0.9),
+    0 0 12px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  white-space: nowrap;
+  will-change: transform, opacity;
+}
+
+.dmg.head {
+  font-size: 30px;
+  color: #ffd76a;
+  text-shadow:
+    0 2px 0 rgba(40, 18, 0, 0.95),
+    0 0 16px rgba(255, 160, 40, 0.8);
+}
+
+.dmg.kill {
+  font-size: 26px;
+  color: #ff7a92;
+}
+
+/* --------------------------------------------------------- reload -------- */
+
+#reload-banner {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.rl-text {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: #e6dcff;
+  text-shadow: 0 0 14px rgba(139, 92, 246, 0.9);
+  animation: rl-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes rl-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.rl-bar {
+  display: block;
+  width: 130px;
+  height: 3px;
+  background: rgba(214, 205, 245, 0.2);
+  overflow: hidden;
+}
+
+/* Width is driven by an animation whose duration is set inline to the
+   weapon's own reload time, so the bar always finishes exactly on the reload. */
+.rl-bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #c4a6ff);
+  transform-origin: left;
+  transform: scaleX(0);
+  animation: rl-fill linear forwards;
+}
+
+@keyframes rl-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* ------------------------------------------------------- kills & score --- */
+
+#kill-banner {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.kill-line {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: #fff;
+  text-shadow: 0 0 16px rgba(255, 90, 120, 0.9);
+  animation: kill-pop 1.5s ease-out forwards;
+}
+
+.kill-line.head {
+  color: #ffd76a;
+  text-shadow: 0 0 18px rgba(255, 170, 40, 0.95);
+}
+
+@keyframes kill-pop {
+  0% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+#hud-score {
+  position: absolute;
+  left: 50%;
+  top: 96px;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.score-label {
+  font-size: 9px;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em;
+  color: rgba(214, 205, 245, 0.45);
+}
+
+#score-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #f0eaff;
+  text-shadow: 0 0 14px rgba(139, 92, 246, 0.6);
+}
+
+#score-pops {
+  position: relative;
+  height: 0;
+}
+
+.score-pop {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #6effc4;
+  text-shadow: 0 0 12px rgba(110, 255, 196, 0.8);
+  animation: score-rise 1.1s ease-out forwards;
+}
+
+@keyframes score-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -22px);
+  }
+}
+
 /* ------------------------------------------------------------------ scope */
 
 /* The optic is DOM rather than scene geometry on purpose: it stays pixel-crisp
@@ -695,6 +898,28 @@ body {
   background: linear-gradient(135deg, #c4a6ff, #8b5cf6);
   border-color: #d9c6ff;
   cursor: default;
+}
+
+/* Locked levels are shown rather than hidden, so the campaign advertises
+   what's ahead instead of appearing to be a single map. */
+.level-option.locked {
+  color: rgba(214, 205, 245, 0.26);
+  background: rgba(139, 92, 246, 0.03);
+  border-color: rgba(196, 166, 255, 0.1);
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.level-option.locked:hover {
+  color: rgba(214, 205, 245, 0.26);
+  background: rgba(139, 92, 246, 0.03);
+  border-color: rgba(196, 166, 255, 0.1);
+}
+
+/* A cleared level keeps a quiet marker so progress is legible at a glance. */
+.level-option.cleared:not([aria-current='true'])::before {
+  content: '✓ ';
+  color: #6effc4;
 }
 
 #start-button {

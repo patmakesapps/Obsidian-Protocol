@@ -10,13 +10,9 @@
     <canvas id="viewport"></canvas>
 
     <div id="hud" class="hidden">
-      <div id="crosshair"><span></span><span></span><span></span><span></span></div>
-      <div id="hitmarker"></div>
-      <div id="damage-vignette"></div>
-
-      <!-- Full-screen optic. Sits early in #hud so the readouts below still
-           paint over it. Four reticle segments rather than two full lines,
-           which leaves the centre clear. -->
+      <!-- The optic is the FIRST child on purpose. Painting order is document
+           order, so everything below it — damage vignette, hitmarkers, damage
+           numbers, every readout — stays visible through the scope. -->
       <div id="scope" aria-hidden="true">
         <div class="scope-lens"></div>
         <div class="scope-reticle">
@@ -26,6 +22,28 @@
           <i class="ret-h ret-right"></i>
           <i class="ret-dot"></i>
         </div>
+      </div>
+
+      <div id="crosshair"><span></span><span></span><span></span><span></span></div>
+      <div id="hitmarker"></div>
+      <div id="damage-vignette"></div>
+
+      <!-- World-anchored damage numbers, projected to screen coordinates each
+           frame. DOM rather than sprites: no per-hit texture generation, and
+           the digits stay crisp at any resolution. -->
+      <div id="damage-numbers"></div>
+
+      <div id="reload-banner" class="hidden">
+        <span class="rl-text">RELOADING</span>
+        <span class="rl-bar"><i></i></span>
+      </div>
+
+      <div id="kill-banner"></div>
+
+      <div id="hud-score">
+        <div class="score-label">SCORE</div>
+        <div id="score-value">0</div>
+        <div id="score-pops"></div>
       </div>
 
       <div id="hud-health">
@@ -103,7 +121,7 @@
       <!-- Secondary bindings live down here so the menu reads as five things,
            not nine. -->
       <div id="overlay-foot">
-        <span>SPACE jump · CTRL crouch · ESC cursor · F3 debug</span>
+        <span>SPACE jump · CTRL crouch · SHIFT+CTRL slide · ESC cursor · F3 debug</span>
         <span class="foot-build">BUILD 0.1.0 · EARLY DEVELOPMENT</span>
       </div>
     </div>

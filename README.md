@@ -22,9 +22,16 @@ npm run build    # production build to dist/
 | `arcology` | Obsidian Arcology | White towers on a block grid under a violet night sky |
 | `basin` | Verdant Basin | An overgrown research outpost in a jungle canyon |
 
+They form a campaign: Verdant Basin stays locked until the Arcology is cleared.
+Completing a level announces the unlock and offers to deploy straight into it.
+Progress is kept in `localStorage` (`src/game/progress.js`) and degrades to
+"nothing unlocked" if storage is unavailable — a lost save replays content
+rather than refusing to start.
+
 Pick one from **DEPLOYMENT ZONE** on the start screen — also reachable from the
 pause menu, so you can switch without restarting the session. `CONFIG.world.level`
-sets the default and `?level=arcology` overrides it per load.
+sets where the campaign begins and `?level=` overrides it per load, though
+neither can open a level that's still locked.
 
 A level is any class with `build()`, `heightAt()`, `isOpenGround()` and
 `randomSpawnPoint()`, plus optional `update(dt)`, registered in
@@ -44,7 +51,7 @@ and nothing the player fights on is more than a step high.
 | --- | --- |
 | `W` `A` `S` `D` | Move |
 | `Shift` | Sprint |
-| `Ctrl` / `C` | Crouch |
+| `Ctrl` / `C` | Crouch — while sprinting, slide |
 | `Space` | Jump |
 | `Mouse` | Look |
 | `LMB` | Fire |
@@ -67,6 +74,11 @@ and nothing the player fights on is more than a step high.
   with a world waypoint and HUD banner.
 - **Pickups** — ammo and med crates that appear when you're actually short, plus
   weapons dropped by the dead carrying their leftover ammo.
+- **Movement** — sprint, crouch, and a sprint-crouch slide that carries under
+  its own friction with limited steering, so it commits you to a line rather
+  than being a faster walk.
+- **Feedback** — floating damage numbers pinned to where the round landed,
+  headshot callouts, elimination banners and a running score.
 
 ## Layout
 

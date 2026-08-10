@@ -1,3 +1,8 @@
+import * as THREE from 'three';
+
+/** Scratch vector for world-to-screen projection of damage numbers. */
+const _projected = new THREE.Vector3();
+
 /**
  * DOM-based HUD. Kept out of the WebGL scene so text stays crisp at any
  * resolution and so restyling is a CSS change, not a shader change.
@@ -8,6 +13,18 @@
  * get either a floating gun over the reticle or a blank frame between the two.
  */
 export const SCOPE_AT = 0.45;
+
+/** How many damage numbers can be on screen at once. */
+const DAMAGE_POOL = 24;
+/** Seconds a damage number lives. */
+const DAMAGE_LIFE = 0.95;
+
+export const SCORE = {
+  hit: 0, // points are for kills, not chip damage
+  kill: 100,
+  headshotKill: 150,
+  droneKill: 75,
+};
 
 export class HUD {
   constructor() {
@@ -21,6 +38,29 @@ export class HUD {
     this.scope = document.getElementById('scope');
     this.crosshair = document.getElementById('crosshair');
     this._scoped = false;
+
+    this.reloadBanner = document.getElementById('reload-banner');
+    this.reloadFill = this.reloadBanner?.querySelector('.rl-bar i') ?? null;
+
+    this.killBanner = document.getElementById('kill-banner');
+    this.scoreValue = document.getElementById('score-value');
+    this.scorePops = document.getElementById('score-pops');
+    this.score = 0;
+
+    // Damage numbers are pooled: a firefight can produce a dozen a second, and
+    // creating and destroying elements at that rate thrashes the DOM.
+    this.damageLayer = document.getElementById('damage-numbers');
+    this._damagePool = [];
+    this._damageActive = [];
+    if (this.damageLayer) {
+      for (let i = 0; i < DAMAGE_POOL; i++) {
+        const el = document.createElement('div');
+        el.className = 'dmg';
+        el.style.opacity = '0';
+        this.damageLayer.appendChild(el);
+        this._damagePool.push(el);
+      }
+    }
     this.vignette = document.getElementById('damage-vignette');
     this.fpsCounter = document.getElementById('fps-counter');
 
@@ -100,8 +140,112 @@ export class HUD {
     this.ammoReserve.textContent = `/ ${reserve}`;
   }
 
-  setReloading(active) {
+  /** @param duration Reload time in seconds; drives the bar so it lands on zero. */
+  setReloading(active, duration = 1.5) {
     this.reloadPrompt.classList.toggle('hidden', !active);
+    if (!this.reloadBanner) return;
+
+    this.reloadBanner.classList.toggle('hidden', !active);
+    if (active && this.reloadFill) {
+      // Restarting a CSS animation needs the property cleared and a reflow
+      // forced, or an interrupted reload leaves the bar part-filled.
+      this.reloadFill.style.animation = 'none';
+      void this.reloadFill.offsetWidth;
+      this.reloadFill.style.animation = `rl-fill ${duration}s linear forwards`;
+    }
+  }
+
+  // ------------------------------------------------------- damage numbers
+
+  /**
+   * Pops a floating number at a world position.
+   *
+   * The caller passes the world point; `updateDamageNumbers` projects it every
+   * frame so the number stays pinned to where the hit landed as you turn,
+   * rather than sliding around the screen.
+   */
+  showDamage(worldPoint, amount, { headshot = false, kill = false } = {}) {
+    if (!this.damageLayer) return;
+
+    const el = this._damagePool.pop();
+    if (!el) return; // pool exhausted; dropping one number is harmless
+
+    el.textContent = kill && headshot ? `${Math.round(amount)}!` : `${Math.round(amount)}`;
+    el.className = `dmg${headshot ? ' head' : ''}${kill && !headshot ? ' kill' : ''}`;
+    el.style.opacity = '1';
+
+    this._damageActive.push({
+      el,
+      x: worldPoint.x,
+      y: worldPoint.y,
+      z: worldPoint.z,
+      life: DAMAGE_LIFE,
+      // A little lateral drift so overlapping hits on one target fan out
+      // instead of stacking into an unreadable pile.
+      drift: (Math.random() - 0.5) * 46,
+    });
+  }
+
+  /** Projects live damage numbers to screen space. Called once per frame. */
+  updateDamageNumbers(dt, camera) {
+    if (!this._damageActive.length || !camera) return;
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    for (let i = this._damageActive.length - 1; i >= 0; i--) {
+      const n = this._damageActive[i];
+      n.life -= dt;
+
+      if (n.life <= 0) {
+        n.el.style.opacity = '0';
+        this._damagePool.push(n.el);
+        this._damageActive.splice(i, 1);
+        continue;
+      }
+
+      _projected.set(n.x, n.y, n.z).project(camera);
+
+      // z > 1 means the point is behind the camera, where projection mirrors it
+      // to a nonsense position on screen.
+      if (_projected.z > 1) {
+        n.el.style.opacity = '0';
+        continue;
+      }
+
+      const t = 1 - n.life / DAMAGE_LIFE;
+      const sx = (_projected.x * 0.5 + 0.5) * width + n.drift * t;
+      const sy = (-_projected.y * 0.5 + 0.5) * height - t * 52;
+
+      n.el.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px) scale(${(1 + (1 - t) * 0.35).toFixed(2)})`;
+      // Hold full opacity for the first half, then fade.
+      n.el.style.opacity = t < 0.5 ? '1' : (2 - t * 2).toFixed(2);
+    }
+  }
+
+  // --------------------------------------------------------- kills & score
+
+  /** Centre-screen elimination callout. */
+  showKill({ headshot = false, label = 'ELIMINATED' } = {}) {
+    if (!this.killBanner) return;
+    const el = document.createElement('div');
+    el.className = `kill-line${headshot ? ' head' : ''}`;
+    el.textContent = headshot ? `${label} · HEADSHOT` : label;
+    this.killBanner.appendChild(el);
+    setTimeout(() => el.remove(), 1600);
+  }
+
+  addScore(points) {
+    if (!points) return;
+    this.score += points;
+    if (this.scoreValue) this.scoreValue.textContent = this.score.toLocaleString();
+    if (!this.scorePops) return;
+
+    const pop = document.createElement('div');
+    pop.className = 'score-pop';
+    pop.textContent = `+${points}`;
+    this.scorePops.appendChild(pop);
+    setTimeout(() => pop.remove(), 1200);
   }
 
   showHitmarker(isHeadshot = false) {

@@ -122,6 +122,7 @@ export class Objectives {
         progress: '',
         done: true,
       });
+      this.game?.onMissionComplete?.();
       return;
     }
 

@@ -40,10 +40,14 @@ export class CameraRig {
   update(dt) {
     const cfg = CONFIG.camera;
 
-    // Zoom follows the player's aim blend. Only touch the projection matrix
-    // when the value actually moves — recomputing it every frame is wasted
-    // work once the transition has settled.
-    const wantedFov = THREE.MathUtils.lerp(cfg.fov, cfg.aimFov, this.player.aimBlend);
+    // Zoom follows the player's aim blend, with a widening kick at sprint
+    // speed. Only touch the projection matrix when the value actually moves —
+    // recomputing it every frame is wasted work once it has settled.
+    // The sprint boost is folded in before the aim lerp so scoping always
+    // arrives at exactly aimFov, however fast you were going.
+    const rush = THREE.MathUtils.clamp((this.player.speedFraction - 0.55) / 0.45, 0, 1);
+    const hipFov = cfg.fov + CONFIG.player.sprintFov * rush;
+    const wantedFov = THREE.MathUtils.lerp(hipFov, cfg.aimFov, this.player.aimBlend);
     if (Math.abs(this.camera.fov - wantedFov) > 0.01) {
       this.camera.fov = wantedFov;
       this.camera.updateProjectionMatrix();
@@ -61,6 +65,9 @@ export class CameraRig {
     const bob = this.player.cameraBobOffset;
     this.camera.position.copy(eye).addScaledVector(this._right, bob.x);
     this.camera.position.y += bob.y;
+    // Slide and landing drops. Applied to position rather than pitch so they
+    // never fight the player's aim.
+    this.camera.position.y -= this.player.slideDip + this.player.landingDip;
 
     // Shake is positional, not angular, so it never fights the player's aim.
     if (this.shake > 0.0001) {

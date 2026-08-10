@@ -327,8 +327,14 @@ export class Weapon {
       const damage = def.damage * (isHead ? def.headshotMultiplier : 1);
       const killed = owner.health - damage <= 0;
 
+      // Flagged before the damage lands, so the death handler knows how the
+      // killing blow arrived and can score the headshot.
+      owner.lastHitWasHeadshot = isHead;
+      owner.killedByPlayer = true;
+
       owner.takeDamage(damage, end, this._dir);
       this.hud?.showHitmarker(isHead);
+      this.hud?.showDamage(hit.point, damage, { headshot: isHead, kill: killed });
       this.audio?.hitConfirm(isHead);
 
       if (typeof owner.onHitEffect === 'function') {
@@ -351,7 +357,7 @@ export class Weapon {
     if (!this.active || this.reloading || this.mag >= def.magSize || this.reserve <= 0) return;
     this.reloading = true;
     this.reloadEndsAt = this.time + def.reloadTime;
-    this.hud?.setReloading(true);
+    this.hud?.setReloading(true, this.def.reloadTime);
     this.audio?.reload();
   }
 
