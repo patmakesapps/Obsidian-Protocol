@@ -34,3 +34,6 @@ __pycache__/
 # Firebase deploy cache
 .firebase/
 .vercel
+
+# multiplayer runtime data
+server/leaderboard.json
