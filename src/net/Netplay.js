@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { RemotePlayers } from './RemotePlayers.js';
+import { RemotePlayers, normalizeChar } from './RemotePlayers.js';
 import { Puppets } from './Puppets.js';
 
 // Movement state goes out at this rate. 15Hz + client-side interpolation reads
@@ -32,11 +32,14 @@ export class Netplay {
     this.matchState = session.state ?? 'live';
 
     this.rows = session.rows ?? [];
+    this.myChar = normalizeChar(localStorage.getItem('op-character'));
     this._sendAccum = 0;
     this._lastAttacker = null;
+    this._lastAttackerAt = -99;
     this._lastAttackHeadshot = false;
     this._lastHitWasAI = false;
     this._respawnAt = null;
+    this._deathHandled = false;
     this._scoreboardVisible = false;
 
     // Hostiles: `bots` is the room setting; `simHost` means THIS client runs
@@ -99,7 +102,7 @@ export class Netplay {
       // A packet can outrun the join notice after a reconnect — treat an
       // unknown id as an implicit join with a neutral colour.
       if (!this.remotes.players.has(msg.id)) {
-        this.remotes.ensure({ id: msg.id, name: `OPERATIVE-${msg.id}`, color: 0xc4a6ff });
+        this.remotes.ensure({ id: msg.id, name: `OPERATIVE-${msg.id}`, color: 0xc4a6ff, char: msg.c });
       }
       this.remotes.state(msg, performance.now() / 1000);
     });
@@ -203,21 +206,38 @@ export class Netplay {
     if (!player.alive) return;
 
     this._lastAttacker = msg.from;
+    this._lastAttackerAt = player.time;
     this._lastAttackHeadshot = !!msg.headshot;
     this._lastHitWasAI = !!msg.ai;
     player.takeDamage(msg.damage);
     this.game.cameraRig?.addShake(CONFIG.camera.shakeOnHit);
+    // Death is noticed centrally in update() — a kill can also come from the
+    // local simulation (AI bolts and melee on the sim host), which never
+    // passes through this handler.
+  }
 
-    if (!player.alive) {
-      // Our death is ours to announce; the server turns it into a kill.
-      this.client.send({
-        t: 'death',
-        killer: this._lastAttacker,
-        headshot: this._lastAttackHeadshot,
-        ai: this._lastHitWasAI,
-      });
-      this._respawnAt = player.time + RESPAWN_DELAY;
+  /** Any local death — network hit, local AI bolt, anything — starts the redeploy. */
+  _watchForDeath() {
+    const player = this.game.player;
+    if (player.alive) {
+      this._deathHandled = false;
+      return;
     }
+    if (this._deathHandled) return;
+    this._deathHandled = true;
+
+    // Attribute to the last attacker only if the hit was recent; otherwise it
+    // was the local simulation (AI), or a mystery we call misadventure.
+    const recent = player.time - this._lastAttackerAt < 5;
+    const killer = recent ? this._lastAttacker : null;
+    const byAI = recent ? this._lastHitWasAI : this.bots;
+    this.client.send({
+      t: 'death',
+      killer,
+      headshot: recent && this._lastAttackHeadshot,
+      ai: byAI,
+    });
+    this._respawnAt = player.time + RESPAWN_DELAY;
   }
 
   /** Promoted to sim host mid-match: spawn a fresh set of real hostiles. */
@@ -298,6 +318,7 @@ export class Netplay {
     const now = performance.now() / 1000;
     this.remotes.update(dt, now);
     this.puppets?.update(dt, now);
+    this._watchForDeath();
 
     this._sendAccum += dt;
     if (this._sendAccum >= 1 / SEND_HZ) {
@@ -339,6 +360,9 @@ export class Netplay {
       p: [+p.position.x.toFixed(2), +p.position.y.toFixed(2), +p.position.z.toFixed(2)],
       yaw: +p.yaw.toFixed(3),
       alive: p.alive,
+      // Character rides in every packet so late joiners, dropped join notices
+      // and mid-match re-picks all converge on the right model.
+      c: this.myChar,
     });
   }
 

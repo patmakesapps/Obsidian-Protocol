@@ -13,6 +13,11 @@ export const CHARACTERS = {
   drone: { label: 'DRONE', model: () => CONFIG.drone.model, hover: 1.05, modelHeight: 0.9 },
 };
 
+/** A valid character id, falling back to the default trooper. */
+export function normalizeChar(id) {
+  return CHARACTERS[id] ? id : 'ivory';
+}
+
 const REMOTE_TRACERS = 16;
 // Render remote players this far in the past, so there are always two known
 // snapshots to interpolate between. 120ms of latency you can't feel in a
@@ -399,7 +404,19 @@ export class RemotePlayers {
   }
 
   state(msg, now) {
-    this.players.get(msg.id)?.pushSnapshot(msg, now);
+    const player = this.players.get(msg.id);
+    if (!player) return; // still loading (null) or unknown — caller handles unknown ids
+
+    // Character rides along in every state packet, so a pick that was missed
+    // at join time (or changed mid-match) converges within a tick: rebuild
+    // the avatar with the right model.
+    if (msg.c && player.char !== normalizeChar(msg.c)) {
+      const { name, color } = player;
+      this.remove(msg.id);
+      this.ensure({ id: msg.id, name, color, char: msg.c });
+      return;
+    }
+    player.pushSnapshot(msg, now);
   }
 
   /** Remote shot: tracer from their muzzle to their hit point, flash, report. */

@@ -6,6 +6,20 @@
  * class is deliberately dumb so it can also be used by the menu for one-shot
  * queries like the leaderboard.
  */
+// Push-style match traffic that may arrive BEFORE the game finishes loading
+// and wires its handlers — buffered and replayed instead of dropped. A missed
+// `playerJoined` used to leave that player rendered with default identity.
+const BUFFERABLE = new Set([
+  'playerJoined',
+  'playerLeft',
+  'kill',
+  'scores',
+  'matchEnd',
+  'matchStart',
+  'simHost',
+]);
+const BUFFER_CAP = 64;
+
 export class NetClient {
   constructor(url) {
     this.url = url;
@@ -13,6 +27,7 @@ export class NetClient {
     this.id = null;
     this.connected = false;
     this.handlers = new Map();
+    this.pending = [];
     this.onClose = null;
   }
 
@@ -77,13 +92,19 @@ export class NetClient {
         } catch {
           return;
         }
-        this.handlers.get(msg.t)?.(msg);
+        const handler = this.handlers.get(msg.t);
+        if (handler) handler(msg);
+        else if (BUFFERABLE.has(msg.t) && this.pending.length < BUFFER_CAP) this.pending.push(msg);
       };
     });
   }
 
   on(type, handler) {
     this.handlers.set(type, handler);
+    // Replay anything of this type that arrived before the handler existed.
+    for (let i = 0; i < this.pending.length; i++) {
+      if (this.pending[i].t === type) handler(this.pending.splice(i--, 1)[0]);
+    }
     return this;
   }
 
