@@ -220,6 +220,15 @@ export class Game {
       if (!locked && this.running && this.player.alive) this.pause();
     };
 
+    // Esc while dead releases the cursor WITHOUT pausing (the pause hook above
+    // requires being alive), which used to strand the player: respawned, game
+    // running, but nothing ever re-captured the mouse — aim and fire dead
+    // until a reload. Any click on a running-but-unlocked game re-engages.
+    this._onCanvasClick = () => {
+      if (this.running && !this.input.locked) this.input.requestLock();
+    };
+    this.canvas.addEventListener('mousedown', this._onCanvasClick);
+
     // Render one frame so the world is visible behind the start overlay.
     this.player.update(0.016, this.cameraRig);
     this.cameraRig.update(0.016);
@@ -612,6 +621,7 @@ export class Game {
     this.running = false;
     this.netplay?.dispose();
     window.removeEventListener('resize', this._onResize);
+    this.canvas.removeEventListener('mousedown', this._onCanvasClick);
     // The music loop outlives the frame loop otherwise — two levels in, two
     // soundtracks are playing on top of each other.
     this.audio?.dispose();
