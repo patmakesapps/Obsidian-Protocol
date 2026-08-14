@@ -108,6 +108,16 @@ export class CharacterPreview {
       { targetHeight: char.height ?? 1.72 },
     );
 
+    // Wide machines (the drone) overflow the frame when normalised by height
+    // alone — refit unrigged models by their longest axis. Rigged humanoids
+    // skip this: Box3 lies about skinned meshes, and they're never wide.
+    if (!character.isRigged) {
+      const box = new THREE.Box3().setFromObject(character.root);
+      const size = box.getSize(new THREE.Vector3());
+      const longest = Math.max(size.x, size.y, size.z);
+      if (longest > 1.25) character.root.scale.multiplyScalar(1.25 / longest);
+    }
+
     const group = new THREE.Group();
     group.add(character.root);
     group.position.y = char.lift ?? 0;

@@ -707,7 +707,10 @@ body {
   z-index: 100;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  /* Tall menu content scrolls the whole overlay, so any scrollbar sits at
+     the screen edge — a scroll region on the inner panel put one mid-screen. */
+  overflow-y: auto;
+  overflow-x: hidden;
   background:
     radial-gradient(ellipse 80% 60% at 50% 42%, rgba(76, 29, 149, 0.42), transparent 70%),
     radial-gradient(ellipse at center, rgba(18, 14, 34, 0.9), rgba(4, 3, 9, 0.985));
@@ -761,12 +764,10 @@ body {
   position: relative;
   z-index: 2;
   max-width: 760px;
-  padding: 40px;
-  /* The multiplayer panel can outgrow a short window — scroll the menu
-     rather than letting it collide with the footer strip. */
-  max-height: calc(100vh - 70px);
-  overflow-y: auto;
-  scrollbar-width: thin;
+  padding: 28px 40px 40px;
+  /* With grid centering, auto margins keep the top reachable when the
+     content is taller than the viewport and the overlay scrolls. */
+  margin: auto;
 }
 
 #overlay-tag {
@@ -800,7 +801,7 @@ body {
 
 #overlay h1 {
   margin: 0;
-  font-size: clamp(38px, 9vw, 92px);
+  font-size: clamp(36px, 7.5vw, 74px);
   font-weight: 700;
   line-height: 0.94;
   letter-spacing: 0.1em;
@@ -827,7 +828,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  margin: 26px 0 18px;
+  margin: 18px 0 12px;
 }
 
 #overlay-rule span {
@@ -845,7 +846,7 @@ body {
 }
 
 #overlay-status {
-  margin: 0 0 32px;
+  margin: 0 0 20px;
   font-size: 12px;
   letter-spacing: 0.36em;
   color: rgba(214, 205, 245, 0.6);
@@ -1355,7 +1356,7 @@ kbd {
   display: flex;
   justify-content: center;
   gap: 8px;
-  margin: 0 0 22px;
+  margin: 0 0 16px;
   pointer-events: auto;
 }
 
@@ -1386,7 +1387,7 @@ kbd {
 
 .menu-panel {
   min-height: 150px;
-  margin-bottom: 26px;
+  margin-bottom: 18px;
 }
 
 /* Field grid: label + picker pairs, centred, two columns on wide screens. */
@@ -1464,7 +1465,7 @@ kbd {
 
 #char-canvas {
   width: 240px;
-  height: 300px;
+  height: 272px;
   display: block;
 }
 
