@@ -206,7 +206,8 @@ export class Weapon {
       this.reloading = false;
       this.hud?.setReloading(false);
     }
-    this.viewmodel.visible = active;
+    // Drone pilots have no hands — the weapon works, it just never shows.
+    this.viewmodel.visible = active && !this.player.droneMode;
   }
 
   // ------------------------------------------------------------------ firing
@@ -310,7 +311,15 @@ export class Weapon {
       ? new THREE.Vector3(hit.point.x, hit.point.y, hit.point.z)
       : this._origin.clone().addScaledVector(this._dir, def.range);
 
-    this.muzzle.getWorldPosition(this._muzzleWorld);
+    // Drone pilots fire from the drone, not from an invisible rifle that
+    // tracks the third-person camera.
+    if (this.player.droneMode && this.player.droneMount) {
+      this._muzzleWorld.copy(this.player.droneMount.position);
+      this._muzzleWorld.y -= 0.15;
+      this.projectiles?.flash(this._muzzleWorld, this.def.muzzleColor, 22);
+    } else {
+      this.muzzle.getWorldPosition(this._muzzleWorld);
+    }
     this._spawnTracer(this._muzzleWorld, end);
 
     // Multiplayer: everyone else draws this shot and hears it.

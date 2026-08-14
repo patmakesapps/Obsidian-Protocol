@@ -119,7 +119,8 @@ export class Player {
    * snap.
    */
   _updateAim(dt) {
-    if (!this.alive) this.aiming = false;
+    // A drone has no rifle optic to raise — the third-person view IS the view.
+    if (!this.alive || this.droneMode) this.aiming = false;
     else if (this.input.locked && this.input.mouse.rightPressed) this.aiming = !this.aiming;
 
     const target = this.aiming ? 1 : 0;
@@ -162,8 +163,9 @@ export class Player {
   _updatePresentation(dt, cameraRig) {
     const cfg = CONFIG.player;
     const horizontalSpeed = Math.hypot(this.velocity.x, this.velocity.z);
-    // A slide isn't a walk cycle, so it doesn't drive head bob or footsteps.
-    const moving = this.grounded && horizontalSpeed > 0.5 && !this.sliding;
+    // A slide isn't a walk cycle, so it doesn't drive head bob or footsteps —
+    // and a hovering drone has neither head nor feet.
+    const moving = this.grounded && horizontalSpeed > 0.5 && !this.sliding && !this.droneMode;
 
     // Camera dips the rig reads. Slide drops fast and recovers gently; landing
     // is a one-shot that only ever decays.

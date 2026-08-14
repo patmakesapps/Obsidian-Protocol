@@ -26,6 +26,8 @@ export class CameraRig {
     this._dir = new THREE.Vector3();
     this._right = new THREE.Vector3();
     this._shakeOffset = new THREE.Vector3();
+    this._pivot = new THREE.Vector3();
+    this._back = new THREE.Vector3();
   }
 
   get pitchLimit() {
@@ -61,13 +63,29 @@ export class CameraRig {
     this._dir.set(0, 0, -1).applyEuler(this._euler);
     this._right.set(1, 0, 0).applyEuler(this._euler);
 
-    const eye = this.player.eyePosition;
-    const bob = this.player.cameraBobOffset;
-    this.camera.position.copy(eye).addScaledVector(this._right, bob.x);
-    this.camera.position.y += bob.y;
-    // Slide and landing drops. Applied to position rather than pitch so they
-    // never fight the player's aim.
-    this.camera.position.y -= this.player.slideDip + this.player.landingDip;
+    if (this.player.droneMode) {
+      // Drone pilot: orbit behind the drone itself. The camera pulls back
+      // along the look direction and slides in when a wall is in the way, so
+      // it never clips through the arena.
+      const pivot = this._pivot.set(
+        this.player.position.x,
+        this.player.position.y + 1.35,
+        this.player.position.z,
+      );
+      const back = this._back.copy(this._dir).negate();
+      const wanted = 4.2;
+      const hit = this.physics.raycast(pivot, back, wanted + 0.3, this.player.collider);
+      const dist = hit ? Math.max(0.6, hit.distance - 0.35) : wanted;
+      this.camera.position.copy(pivot).addScaledVector(back, dist);
+    } else {
+      const eye = this.player.eyePosition;
+      const bob = this.player.cameraBobOffset;
+      this.camera.position.copy(eye).addScaledVector(this._right, bob.x);
+      this.camera.position.y += bob.y;
+      // Slide and landing drops. Applied to position rather than pitch so they
+      // never fight the player's aim.
+      this.camera.position.y -= this.player.slideDip + this.player.landingDip;
+    }
 
     // Shake is positional, not angular, so it never fights the player's aim.
     if (this.shake > 0.0001) {

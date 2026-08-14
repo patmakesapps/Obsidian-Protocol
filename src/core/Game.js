@@ -16,6 +16,7 @@ import { Weapon } from '../player/Weapon.js';
 import { Loadout } from '../player/Loadout.js';
 import { Projectiles } from '../combat/Projectiles.js';
 import { Enemy, Ally, Drone } from '../entities/Combatants.js';
+import { Character } from '../entities/Character.js';
 import { Pickups } from '../items/Pickups.js';
 import { Objectives } from '../game/Objectives.js';
 import { HUD, SCORE } from '../ui/HUD.js';
@@ -176,10 +177,10 @@ export class Game {
       // Shielded through the first moments after deploying, same as a respawn.
       this.player.invulnUntil = this.player.time + 2.5;
 
-      // In first person you never see your own body — the weapon is the only
-      // part of "you" on screen. Dress it as your character so the pick is
-      // visible even in an empty match.
-      this._applyCharacterSkin(this.netSession.session.char);
+      // Playing the drone is a different view entirely: third person behind
+      // your actual drone model, no rifle viewmodel. Troopers stay first
+      // person with the stock weapons.
+      if (this.netSession.session.char === 'drone') await this._enterDroneMode();
 
       // Hostiles are an opt-in match setting, simulated by exactly one client
       // (the sim host) and streamed to the rest.
@@ -249,35 +250,44 @@ export class Game {
   }
 
   /**
-   * Tints every carried weapon's viewmodel to match the chosen character.
-   * Materials are cloned first — the source GLB materials are shared through
-   * the asset cache, and the tint belongs to this player's hands only.
+   * Drone pilot view: your own drone model hovers at your position and the
+   * camera rides behind it (CameraRig handles the orbit). The rifle viewmodel
+   * never shows — a drone doesn't carry one — but the weapon logic underneath
+   * is untouched, so damage and ammo behave identically to a trooper's.
    */
-  _applyCharacterSkin(charId) {
-    const skins = {
-      obsidian: { color: 0x2e2f3b, emissive: null },
-      drone: { color: 0x3d414e, emissive: 0xff9a3c, emissiveIntensity: 0.55 },
-    };
-    const skin = skins[charId];
-    if (!skin) return; // ivory keeps the stock white rifles
+  async _enterDroneMode() {
+    this.player.droneMode = true;
 
-    const tint = new THREE.Color(skin.color);
-    for (const weapon of this.loadout?.weapons ?? []) {
-      weapon.viewmodel.traverse((n) => {
-        if (!n.isMesh || !n.material) return;
-        const mats = Array.isArray(n.material) ? n.material : [n.material];
-        const cloned = mats.map((m) => {
-          const copy = m.clone();
-          copy.color?.multiply(tint);
-          if (skin.emissive && copy.emissive) {
-            copy.emissive.setHex(skin.emissive);
-            copy.emissiveIntensity = skin.emissiveIntensity;
-          }
-          return copy;
-        });
-        n.material = Array.isArray(n.material) ? cloned : cloned[0];
-      });
-    }
+    const instance = await this.assets.instantiate(CONFIG.drone.model);
+    const character = new Character(instance ?? undefined, { targetHeight: 0.9 });
+    this.droneAvatar = character;
+    this.scene.add(character.root);
+    this.player.droneMount = character.root;
+
+    for (const weapon of this.loadout?.weapons ?? []) weapon.viewmodel.visible = false;
+  }
+
+  /** Keeps the pilot's drone glued to the player capsule, with hover and bank. */
+  _updateDroneAvatar(dt) {
+    if (!this.droneAvatar) return;
+    const root = this.droneAvatar.root;
+    const p = this.player;
+    this._droneBobPhase = (this._droneBobPhase ?? 0) + dt * 1.6;
+
+    root.position.set(
+      p.position.x,
+      p.position.y + 1.05 + Math.sin(this._droneBobPhase) * 0.08,
+      p.position.z,
+    );
+    root.rotation.y = p.yaw;
+    this.droneAvatar.update(dt);
+    // Bank into travel, same read as the AI drones — applied after the
+    // character update so the procedural idle doesn't overwrite it.
+    const body = this.droneAvatar.body;
+    body.rotation.z = THREE.MathUtils.clamp(-p.velocity.x * 0.04, -0.3, 0.3);
+    body.rotation.x = THREE.MathUtils.clamp(p.velocity.z * 0.04, -0.3, 0.3);
+    // Dead pilots leave no floating shell; respawn brings it back.
+    root.visible = p.alive;
   }
 
   async _createWeapon(def) {
@@ -551,6 +561,7 @@ export class Game {
 
     this.level.update?.(dt);
     this.player.update(dt, this.cameraRig);
+    this._updateDroneAvatar(dt);
     this.cameraRig.update(dt);
     this.loadout.update(dt, this.input);
     this.hud.setScope(this.player.aimBlend);
