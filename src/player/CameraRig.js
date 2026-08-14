@@ -64,16 +64,17 @@ export class CameraRig {
     this._right.set(1, 0, 0).applyEuler(this._euler);
 
     if (this.player.droneMode) {
-      // Drone pilot: orbit behind the drone itself. The camera pulls back
-      // along the look direction and slides in when a wall is in the way, so
-      // it never clips through the arena.
+      // Drone pilot: over-the-shoulder orbit. The pivot sits above and to the
+      // right of the drone so the machine rides low-left of the crosshair and
+      // never blocks what you're shooting at; the camera slides in when a
+      // wall is behind you so it can't clip through the arena.
       const pivot = this._pivot.set(
         this.player.position.x,
-        this.player.position.y + 1.35,
+        this.player.position.y + 1.6,
         this.player.position.z,
-      );
+      ).addScaledVector(this._right, 0.85);
       const back = this._back.copy(this._dir).negate();
-      const wanted = 4.2;
+      const wanted = 3.4;
       const hit = this.physics.raycast(pivot, back, wanted + 0.3, this.player.collider);
       const dist = hit ? Math.max(0.6, hit.distance - 0.35) : wanted;
       this.camera.position.copy(pivot).addScaledVector(back, dist);

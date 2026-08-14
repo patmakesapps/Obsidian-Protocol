@@ -179,8 +179,9 @@ export class Game {
 
       // Playing the drone is a different view entirely: third person behind
       // your actual drone model, no rifle viewmodel. Troopers stay first
-      // person with the stock weapons.
+      // person — the obsidian trooper's rifles are blacked out to match.
       if (this.netSession.session.char === 'drone') await this._enterDroneMode();
+      else if (this.netSession.session.char === 'obsidian') this._darkenWeapons();
 
       // Hostiles are an opt-in match setting, simulated by exactly one client
       // (the sim host) and streamed to the rest.
@@ -250,6 +251,27 @@ export class Game {
   }
 
   /**
+   * Obsidian trooper: the same rifles in black. Materials are cloned — the
+   * source GLB materials are shared through the asset cache and the paint job
+   * belongs to this player's hands only.
+   */
+  _darkenWeapons() {
+    const tint = new THREE.Color(0x2c2d38);
+    for (const weapon of this.loadout?.weapons ?? []) {
+      weapon.viewmodel.traverse((n) => {
+        if (!n.isMesh || !n.material) return;
+        const mats = Array.isArray(n.material) ? n.material : [n.material];
+        const cloned = mats.map((m) => {
+          const copy = m.clone();
+          copy.color?.multiply(tint);
+          return copy;
+        });
+        n.material = Array.isArray(n.material) ? cloned : cloned[0];
+      });
+    }
+  }
+
+  /**
    * Drone pilot view: your own drone model hovers at your position and the
    * camera rides behind it (CameraRig handles the orbit). The rifle viewmodel
    * never shows — a drone doesn't carry one — but the weapon logic underneath
@@ -260,6 +282,12 @@ export class Game {
 
     const instance = await this.assets.instantiate(CONFIG.drone.model);
     const character = new Character(instance ?? undefined, { targetHeight: 0.9 });
+    // The drone is far wider than tall, so height-normalising balloons it —
+    // refit by longest axis to a compact machine that doesn't fill the view.
+    const box = new THREE.Box3().setFromObject(character.root);
+    const size = box.getSize(new THREE.Vector3());
+    const longest = Math.max(size.x, size.y, size.z);
+    if (longest > 1.1) character.body.scale.multiplyScalar(1.1 / longest);
     this.droneAvatar = character;
     this.scene.add(character.root);
     this.player.droneMount = character.root;

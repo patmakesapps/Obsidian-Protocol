@@ -100,7 +100,15 @@ export class RemotePlayer {
     this.character.play('idle');
     this.character.calibrateToFeet();
     // Drones float: lift the model inside the capsule, ring stays grounded.
-    if (def.hover) this.character.body.position.y += def.hover;
+    // They're also wider than tall, so refit by longest axis (body only — the
+    // ring and name tag hang off the root and must keep their size).
+    if (def.hover) {
+      const box = new THREE.Box3().setFromObject(this.character.root);
+      const size = box.getSize(new THREE.Vector3());
+      const longest = Math.max(size.x, size.y, size.z);
+      if (longest > 1.1) this.character.body.scale.multiplyScalar(1.1 / longest);
+      this.character.body.position.y += def.hover;
+    }
 
     // Identity ring: a flat glowing band at the feet in the player's colour,
     // so you can tell who is who at a glance across the map.
