@@ -13,7 +13,9 @@ export class Enemy extends Actor {
   }
 
   acquireTarget() {
-    const candidates = [this.world.player, ...this.world.allies].filter(
+    // `remotes` is other human players, present only in multiplayer matches
+    // with hostiles enabled — the AI hunts everyone equally.
+    const candidates = [this.world.player, ...this.world.allies, ...(this.world.remotes ?? [])].filter(
       (c) => c && c.alive !== false && !c.isDead,
     );
     let best = null;
@@ -122,7 +124,7 @@ export class Drone extends Actor {
   }
 
   acquireTarget() {
-    const candidates = [this.world.player, ...this.world.allies].filter(
+    const candidates = [this.world.player, ...this.world.allies, ...(this.world.remotes ?? [])].filter(
       (c) => c && c.alive !== false && !c.isDead,
     );
     let best = null;

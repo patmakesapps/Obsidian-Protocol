@@ -249,6 +249,9 @@ export const CONFIG = {
     height: 1.9,
     turnRate: 6.0,
     count: 26,
+    // Hostile headcount in a multiplayer match with bots enabled — a shared
+    // arena is small and players are the main event, so far fewer than solo.
+    mpCount: 8,
     // Hostiles are spawned in squads around scattered anchors and stay dormant
     // until the player closes in, so you meet them in fights rather than as one
     // 26-strong swarm converging from every direction at once.

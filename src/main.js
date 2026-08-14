@@ -100,8 +100,31 @@ function goToMatch(levelId, code, name) {
   window.location.assign(url);
 }
 
+/** The player's saved multiplayer character, defaulting to the white trooper. */
+function savedCharacter() {
+  const char = localStorage.getItem('op-character');
+  return ['ivory', 'obsidian', 'drone'].includes(char) ? char : 'ivory';
+}
+
+/** CAMPAIGN / MULTIPLAYER tabs; one panel visible at a time. */
+function setupMenuTabs(startInMp) {
+  const tabs = [...document.querySelectorAll('.menu-tab')];
+  const select = (panelId) => {
+    for (const tab of tabs) {
+      const on = tab.dataset.panel === panelId;
+      tab.classList.toggle('active', on);
+      document.getElementById(tab.dataset.panel)?.classList.toggle('hidden', !on);
+    }
+    // The multiplayer panel is tall; the fixed footer strip would overlap it
+    // on smaller windows, and its keybind hints are campaign trivia anyway.
+    document.getElementById('overlay-foot')?.classList.toggle('hidden', panelId === 'panel-mp');
+  };
+  for (const tab of tabs) tab.addEventListener('click', () => select(tab.dataset.panel));
+  if (startInMp) select('panel-mp');
+}
+
 /** Lobby controls on the start screen: create, join, leaderboard. */
-function setupMultiplayerMenu(activeLevelId) {
+function setupMultiplayerMenu() {
   const nameInput = document.getElementById('mp-name');
   const codeInput = document.getElementById('mp-code');
   const createBtn = document.getElementById('mp-create');
@@ -112,6 +135,47 @@ function setupMultiplayerMenu(activeLevelId) {
   if (!nameInput || !createBtn) return;
 
   nameInput.value = localStorage.getItem('op-callsign') ?? '';
+
+  // Character picker — cosmetic, remembered per browser.
+  const charButtons = [...document.querySelectorAll('#char-options .pick-option')];
+  const pickChar = (char) => {
+    localStorage.setItem('op-character', char);
+    for (const b of charButtons) b.classList.toggle('active', b.dataset.char === char);
+  };
+  for (const b of charButtons) b.addEventListener('click', () => pickChar(b.dataset.char));
+  pickChar(savedCharacter());
+
+  // Arena picker — multiplayer can use any level, locks don't apply. Defaults
+  // to The Pit, the purpose-built arena.
+  let mpLevel = localStorage.getItem('op-mp-level') ?? 'pit';
+  const levelHolder = document.getElementById('mp-level-options');
+  if (levelHolder) {
+    for (const level of levelList()) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pick-option';
+      b.textContent = level.name;
+      b.dataset.level = level.id;
+      b.addEventListener('click', () => {
+        mpLevel = level.id;
+        localStorage.setItem('op-mp-level', mpLevel);
+        for (const o of levelHolder.children) o.classList.toggle('active', o === b);
+      });
+      levelHolder.appendChild(b);
+    }
+    for (const o of levelHolder.children) o.classList.toggle('active', o.dataset.level === mpLevel);
+  }
+
+  // Hostiles picker — whether AI joins the deathmatch.
+  let bots = localStorage.getItem('op-mp-bots') === '1';
+  const botButtons = [...document.querySelectorAll('#bots-options .pick-option')];
+  const pickBots = (on) => {
+    bots = on;
+    localStorage.setItem('op-mp-bots', on ? '1' : '0');
+    for (const b of botButtons) b.classList.toggle('active', (b.dataset.bots === '1') === on);
+  };
+  for (const b of botButtons) b.addEventListener('click', () => pickBots(b.dataset.bots === '1'));
+  pickBots(bots);
 
   const callsign = () => {
     const name = nameInput.value.trim().toUpperCase() || 'OPERATIVE';
@@ -130,10 +194,10 @@ function setupMultiplayerMenu(activeLevelId) {
     try {
       const client = new NetClient(NetClient.defaultUrl());
       await client.connect();
-      const reply = await client.request({ t: 'create', level: activeLevelId }, ['created', 'error']);
+      const reply = await client.request({ t: 'create', level: mpLevel, bots }, ['created', 'error']);
       client.close();
       if (reply.t === 'error') throw new Error(reply.message);
-      goToMatch(activeLevelId, reply.code, callsign());
+      goToMatch(mpLevel, reply.code, callsign());
     } catch (err) {
       setMpStatus(err.message ?? 'SERVER UNREACHABLE', 'error');
       busy(false);
@@ -193,7 +257,7 @@ async function joinFromUrl(mp, activeLevelId) {
   const client = new NetClient(NetClient.defaultUrl());
   await client.connect();
   const session = await client.request(
-    { t: 'join', code: mp.room, name: mp.name || 'OPERATIVE' },
+    { t: 'join', code: mp.room, name: mp.name || 'OPERATIVE', char: savedCharacter() },
     ['joined', 'error'],
   );
   if (session.t === 'error') {
@@ -216,7 +280,8 @@ async function boot() {
   // Shown before loading starts, so the picker is usable while the world builds
   // and a mis-click doesn't mean waiting out a load first.
   buildLevelSelect(active.id);
-  setupMultiplayerMenu(active.id);
+  setupMenuTabs(mp.active);
+  setupMultiplayerMenu();
 
   let netSession = null;
   if (mp.active) {

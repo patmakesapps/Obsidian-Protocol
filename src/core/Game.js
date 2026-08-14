@@ -173,6 +173,13 @@ export class Game {
         client: this.netSession.client,
         session: this.netSession.session,
       });
+
+      // Hostiles are an opt-in match setting, simulated by exactly one client
+      // (the sim host) and streamed to the rest.
+      if (this.netSession.session.bots && this.netSession.session.simHost) {
+        onProgress('DEPLOYING HOSTILES');
+        await this._spawnSquads(CONFIG.enemy.mpCount ?? 8);
+      }
     } else {
       this.pickups = new Pickups({
         scene: this.scene,
@@ -356,6 +363,9 @@ export class Game {
    * off, or a hostile walking into a friendly bolt, shouldn't pay out.
    */
   _scoreKill(actor, basePoints, label = 'ELIMINATED') {
+    // In multiplayer the server is the scorekeeper — kills come back as
+    // broadcast events (including AI kills), so scoring here would double up.
+    if (this.netplay) return;
     if (!actor?.killedByPlayer) return;
     const headshot = !!actor.lastHitWasHeadshot;
     const points = headshot ? SCORE.headshotKill : basePoints;

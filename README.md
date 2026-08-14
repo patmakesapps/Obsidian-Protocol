@@ -17,9 +17,23 @@ npm run build    # production build to dist/
 
 ## Multiplayer
 
-Free-for-all deathmatch, Call of Duty style: no AI in multiplayer — every
-combatant is a player. First to 20 eliminations wins, then the match resets
-after a short intermission. Every player carries both rifles from the start.
+Free-for-all deathmatch, Call of Duty style. First to 20 eliminations wins,
+then the match resets after a short intermission. Every player carries both
+rifles from the start.
+
+The start screen has two tabs — **CAMPAIGN** and **MULTIPLAYER**. The
+multiplayer tab is the lobby: callsign, **character** (Ivory trooper, Obsidian
+trooper, or a hovering Drone — cosmetic only, every choice keeps the same
+hitbox), **arena**, and **hostiles**:
+
+- **Arena** — any level works, but **THE PIT** is the purpose-built one: a
+  compact walled arena with a contested centre platform, quarter-turn
+  symmetric cover, and its own dusk atmosphere (`src/world/ArenaLevel.js`).
+- **Hostiles** — `PLAYERS ONLY` is pure PvP. `AI JOINS THE FIGHT` adds a
+  squad of AI hostiles that hunt every player equally; their kills show in
+  the feed as HOSTILES, and killing them scores like a player elimination.
+  One client (the match creator, or their successor if they leave) simulates
+  the AI and streams it to the rest.
 
 ```bash
 npm run server        # start the relay on :8081 (keep it running)
@@ -84,6 +98,8 @@ at real-network jitter.
 | --- | --- | --- |
 | `arcology` | Obsidian Arcology | White towers on a block grid under a violet night sky |
 | `basin` | Verdant Basin | An overgrown research outpost in a jungle canyon |
+
+| `pit` | The Pit | A compact walled arena — the multiplayer map, always unlocked |
 
 They form a campaign: Verdant Basin stays locked until the Arcology is cleared.
 Completing a level announces the unlock and offers to deploy straight into it.

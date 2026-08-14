@@ -2,6 +2,17 @@ import * as THREE from 'three';
 import { CONFIG, WEAPONS } from '../config.js';
 import { Character, buildPlaceholderTrooper } from '../entities/Character.js';
 
+/**
+ * Selectable multiplayer characters. Purely cosmetic — every choice keeps the
+ * standard player capsule so nobody buys a smaller hitbox. The drone hovers:
+ * its model floats at chest height inside the same capsule.
+ */
+export const CHARACTERS = {
+  ivory: { label: 'IVORY TROOPER', model: () => CONFIG.ally.model, hover: 0, modelHeight: null },
+  obsidian: { label: 'OBSIDIAN TROOPER', model: () => CONFIG.enemy.model, hover: 0, modelHeight: null },
+  drone: { label: 'DRONE', model: () => CONFIG.drone.model, hover: 1.05, modelHeight: 0.9 },
+};
+
 const REMOTE_TRACERS = 16;
 // Render remote players this far in the past, so there are always two known
 // snapshots to interpolate between. 120ms of latency you can't feel in a
@@ -47,12 +58,13 @@ function makeNameTag(name, colorHex) {
  * the latest packet — see INTERP_DELAY.
  */
 export class RemotePlayer {
-  constructor({ scene, physics, id, name, color, model, position }) {
+  constructor({ scene, physics, id, name, color, model, position, char = 'ivory' }) {
     this.scene = scene;
     this.physics = physics;
     this.id = id;
     this.name = name;
     this.color = color;
+    this.char = CHARACTERS[char] ? char : 'ivory';
 
     this.faction = 'remote'; // its own faction: shootable, no friendly-fire skip
     this.height = CONFIG.player.standHeight;
@@ -69,9 +81,10 @@ export class RemotePlayer {
     /** @type {Array<{t:number,x:number,y:number,z:number,yaw:number,alive:boolean}>} */
     this.snapshots = [];
 
+    const def = CHARACTERS[this.char];
     this.character = new Character(
       model ?? { scene: buildPlaceholderTrooper(this.height, 0x3a3d52) },
-      { targetHeight: this.height },
+      { targetHeight: def.modelHeight ?? this.height },
     );
     this.root = this.character.root;
     this.root.position.copy(this.position);
@@ -81,6 +94,8 @@ export class RemotePlayer {
     scene.add(this.root);
     this.character.play('idle');
     this.character.calibrateToFeet();
+    // Drones float: lift the model inside the capsule, ring stays grounded.
+    if (def.hover) this.character.body.position.y += def.hover;
 
     // Identity ring: a flat glowing band at the feet in the player's colour,
     // so you can tell who is who at a glance across the map.
@@ -116,7 +131,9 @@ export class RemotePlayer {
     this.root.add(this.ringFill);
 
     this.nameTag = makeNameTag(name, color);
-    this.nameTag.position.y = this.height + 0.42;
+    this.nameTag.position.y = def.hover
+      ? def.hover + (def.modelHeight ?? 1) * 0.5 + 0.5
+      : this.height + 0.42;
     this.root.add(this.nameTag);
 
     this._addBody();
@@ -160,13 +177,21 @@ export class RemotePlayer {
   }
 
   /**
-   * Local hitscan landed on this avatar. Damage is not applied here — the
-   * victim's own client owns its health. The manager forwards the hit over the
-   * wire; this just mirrors health so kill-shot prediction reads right.
+   * Something local connected with this avatar. Damage is not applied here —
+   * the victim's own client owns its health. What we do is route by source:
+   * the local player's shots become PvP hit messages, and (on the sim host)
+   * AI bolts/melee become forwarded AI damage. Health only mirrors so
+   * kill-shot prediction reads right.
    */
   takeDamage(amount) {
-    this.health = Math.max(0, this.health - amount);
+    const fromAI = this.lastHitFaction === 'enemy';
+    this.lastHitFaction = null;
     this.character.flash(1);
+    if (fromAI) {
+      this.onAIHit?.(this, amount);
+      return;
+    }
+    this.health = Math.max(0, this.health - amount);
     this.onLocalHit?.(this, amount, !!this.lastHitWasHeadshot);
   }
 
@@ -338,13 +363,14 @@ export class RemotePlayers {
   }
 
   /** Spawns an avatar for a newly seen player. Async because the model loads lazily. */
-  async ensure({ id, name, color }) {
+  async ensure({ id, name, color, char = 'ivory' }) {
     if (this.players.has(id)) return this.players.get(id);
 
     // Reserve the slot synchronously so a burst of state packets while the
     // model loads doesn't spawn duplicates.
     this.players.set(id, null);
-    const model = await this.assets.instantiate(CONFIG.player.model);
+    const def = CHARACTERS[char] ?? CHARACTERS.ivory;
+    const model = await this.assets.instantiate(def.model());
     if (!this.players.has(id)) return null; // removed while the model loaded
 
     const player = new RemotePlayer({
@@ -353,9 +379,11 @@ export class RemotePlayers {
       id,
       name,
       color,
+      char,
       model,
     });
     player.onLocalHit = (p, damage, headshot) => this.onLocalHit?.(p, damage, headshot);
+    player.onAIHit = (p, damage) => this.onAIHit?.(p, damage);
     this.players.set(id, player);
     return player;
   }

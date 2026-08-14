@@ -106,14 +106,22 @@ function makeCode() {
 }
 
 class Room {
-  constructor(code, level) {
+  constructor(code, level, bots = false) {
     this.code = code;
     this.level = level;
+    // Hostiles on/off for this match. When on, exactly one client (the "sim
+    // host") runs the AI and streams it to the rest; the server only routes.
+    this.bots = bots;
+    this.simHostId = null;
     /** @type {Map<number, Client>} */
     this.players = new Map();
     this.state = 'live'; // 'live' | 'intermission'
     this.emptySince = Date.now();
     this._intermissionTimer = null;
+  }
+
+  get simHost() {
+    return this.players.get(this.simHostId) ?? null;
   }
 
   broadcast(message, except = null) {
@@ -128,6 +136,7 @@ class Room {
       id: c.id,
       name: c.name,
       color: c.color,
+      char: c.char,
       kills: c.kills,
       deaths: c.deaths,
     }));
@@ -161,9 +170,10 @@ class Room {
     client.deaths = 0;
     this.players.set(client.id, client);
     this.emptySince = null;
+    if (this.bots && this.simHostId === null) this.simHostId = client.id;
 
     this.broadcast(
-      { t: 'playerJoined', id: client.id, name: client.name, color: client.color },
+      { t: 'playerJoined', id: client.id, name: client.name, color: client.color, char: client.char },
       client,
     );
   }
@@ -173,11 +183,19 @@ class Room {
     client.room = null;
     this.broadcast({ t: 'playerLeft', id: client.id, name: client.name });
     this.broadcast({ t: 'scores', rows: this.scores(), limit: KILL_LIMIT });
+
+    // The AI simulation dies with its host — promote the next player, who
+    // spawns a fresh set of hostiles when told.
+    if (this.bots && client.id === this.simHostId) {
+      const next = this.players.values().next().value ?? null;
+      this.simHostId = next?.id ?? null;
+      next?.send({ t: 'simHost' });
+    }
     if (this.players.size === 0) this.emptySince = Date.now();
   }
 
   /** A confirmed elimination, reported by the victim's own client. */
-  onKill(victim, killerId, headshot) {
+  onKill(victim, killerId, headshot, byAI = false) {
     if (this.state !== 'live') return;
 
     victim.deaths++;
@@ -196,13 +214,37 @@ class Room {
       victimName: victim.name,
       victimColor: victim.color,
       killer: killer?.id ?? null,
-      killerName: killer?.name ?? null,
-      killerColor: killer?.color ?? 0xffffff,
+      killerName: killer?.name ?? (byAI ? 'HOSTILES' : null),
+      killerColor: killer?.color ?? 0xff8a5c,
       headshot: !!headshot,
     });
     this.broadcast({ t: 'scores', rows: this.scores(), limit: KILL_LIMIT });
 
     if (killer && killer.kills >= KILL_LIMIT) this.endMatch(killer);
+  }
+
+  /** An AI hostile went down; `by` is the player who landed the kill. */
+  onBotKill(byId, headshot) {
+    if (this.state !== 'live') return;
+    const killer = this.players.get(byId) ?? null;
+    if (!killer) return;
+
+    killer.kills++;
+    boardEntry(killer.name).kills++;
+    saveLeaderboard();
+
+    this.broadcast({
+      t: 'kill',
+      victim: null,
+      victimName: 'HOSTILE',
+      victimColor: 0x9aa0b5,
+      killer: killer.id,
+      killerName: killer.name,
+      killerColor: killer.color,
+      headshot: !!headshot,
+    });
+    this.broadcast({ t: 'scores', rows: this.scores(), limit: KILL_LIMIT });
+    if (killer.kills >= KILL_LIMIT) this.endMatch(killer);
   }
 
   endMatch(winner) {
@@ -294,10 +336,10 @@ function handleMessage(client, msg) {
     case 'create': {
       const code = makeCode();
       if (!code) return client.send({ t: 'error', message: 'SERVER FULL' });
-      const room = new Room(code, typeof msg.level === 'string' ? msg.level : 'arcology');
+      const room = new Room(code, typeof msg.level === 'string' ? msg.level : 'pit', !!msg.bots);
       rooms.set(code, room);
-      console.log(`[room ${code}] created (${room.level})`);
-      client.send({ t: 'created', code, level: room.level });
+      console.log(`[room ${code}] created (${room.level}${room.bots ? ' + hostiles' : ''})`);
+      client.send({ t: 'created', code, level: room.level, bots: room.bots });
       break;
     }
 
@@ -308,7 +350,14 @@ function handleMessage(client, msg) {
       const code = String(msg.code ?? '').toUpperCase().trim();
       const room = rooms.get(code);
       if (!room) return client.send({ t: 'error', message: 'MATCH NOT FOUND' });
-      client.send({ t: 'peeked', code, level: room.level, players: room.players.size, max: MAX_PLAYERS });
+      client.send({
+        t: 'peeked',
+        code,
+        level: room.level,
+        bots: room.bots,
+        players: room.players.size,
+        max: MAX_PLAYERS,
+      });
       break;
     }
 
@@ -320,12 +369,15 @@ function handleMessage(client, msg) {
       if (client.room) client.room.remove(client);
 
       client.name = String(msg.name ?? 'OPERATIVE');
+      client.char = ['obsidian', 'ivory', 'drone'].includes(msg.char) ? msg.char : 'ivory';
       room.add(client);
       client.send({
         t: 'joined',
         id: client.id,
         code,
         level: room.level,
+        bots: room.bots,
+        simHost: room.simHostId === client.id,
         name: client.name,
         color: client.color,
         players: room.roster().filter((p) => p.id !== client.id),
@@ -364,7 +416,39 @@ function handleMessage(client, msg) {
     // Reported by the victim once its own health hits zero.
     case 'death': {
       if (!client.room) return;
-      client.room.onKill(client, msg.killer ?? null, msg.headshot);
+      client.room.onKill(client, msg.killer ?? null, msg.headshot, !!msg.ai);
+      break;
+    }
+
+    // ---- hostiles (bots): the sim host runs the AI, the server just routes.
+
+    // AI world snapshot + replicated AI bolts, sim host → everyone else.
+    case 'bots':
+    case 'botFire': {
+      if (!client.room || client.id !== client.room.simHostId) return;
+      client.room.broadcast(msg, client);
+      break;
+    }
+
+    // A player shot an AI puppet — goes to the sim host to apply for real.
+    case 'botHit': {
+      if (!client.room) return;
+      msg.from = client.id;
+      client.room.simHost?.send(msg);
+      break;
+    }
+
+    // Sim host confirms an AI death and names who earned it.
+    case 'botKill': {
+      if (!client.room || client.id !== client.room.simHostId) return;
+      client.room.onBotKill(msg.by, msg.headshot);
+      break;
+    }
+
+    // AI damaged a remote player on the sim host's world — route to victim.
+    case 'aihit': {
+      if (!client.room || client.id !== client.room.simHostId) return;
+      client.room.players.get(msg.target)?.send({ t: 'aihit', damage: msg.damage });
       break;
     }
 

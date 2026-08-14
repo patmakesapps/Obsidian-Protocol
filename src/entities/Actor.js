@@ -591,6 +591,8 @@ export class Actor {
 
     this.audio?.enemyShoot(this.faction);
     this.onFire?.();
+    // Multiplayer hook: the sim host replicates this bolt to everyone else.
+    this.onFireShot?.(origin, this._aim, cfg.projectileSpeed, cfg.projectileDamage);
   }
 
   _tryMelee() {
@@ -604,7 +606,12 @@ export class Actor {
     const strikeDelay = 260;
     setTimeout(() => {
       if (this.isDead || !victim || victim.alive === false) return;
-      if (this.distanceTo(victim) <= cfg.meleeRange * 1.4) victim.takeDamage(cfg.meleeDamage);
+      if (this.distanceTo(victim) <= cfg.meleeRange * 1.4) {
+        // Who dealt this — remote-player avatars route AI damage differently
+        // from player damage (see RemotePlayer.takeDamage).
+        victim.lastHitFaction = this.faction;
+        victim.takeDamage(cfg.meleeDamage);
+      }
     }, strikeDelay);
   }
 

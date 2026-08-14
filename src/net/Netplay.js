@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { RemotePlayers } from './RemotePlayers.js';
+import { Puppets } from './Puppets.js';
 
 // Movement state goes out at this rate. 15Hz + client-side interpolation reads
 // smoother than 60Hz raw would, and is a tenth of the bandwidth.
 const SEND_HZ = 15;
+// AI snapshots are chunkier (whole bot list) and AI movement is slower, so a
+// lower rate reads fine.
+const BOTS_HZ = 10;
 const RESPAWN_DELAY = 3.0;
 
 /**
@@ -31,8 +35,16 @@ export class Netplay {
     this._sendAccum = 0;
     this._lastAttacker = null;
     this._lastAttackHeadshot = false;
+    this._lastHitWasAI = false;
     this._respawnAt = null;
     this._scoreboardVisible = false;
+
+    // Hostiles: `bots` is the room setting; `simHost` means THIS client runs
+    // the real AI and streams it. Everyone else renders puppets.
+    this.bots = !!session.bots;
+    this.simHost = !!session.simHost;
+    this._botsAccum = 0;
+    this._nextBotId = 1;
 
     this.remotes = new RemotePlayers({
       scene: game.scene,
@@ -45,6 +57,17 @@ export class Netplay {
     this.remotes.onLocalHit = (player, damage, headshot) => {
       this.client.send({ t: 'hit', target: player.id, damage, headshot });
     };
+    // Sim host only: the AI hurt another player's avatar in our simulation.
+    this.remotes.onAIHit = (player, damage) => {
+      this.client.send({ t: 'aihit', target: player.id, damage });
+    };
+
+    if (this.bots && !this.simHost) {
+      this.puppets = new Puppets({ scene: game.scene, physics: game.physics, assets: game.assets });
+      this.puppets.onLocalHit = (bot, damage, headshot) => {
+        this.client.send({ t: 'botHit', bot: bot.id, damage, headshot });
+      };
+    }
 
     for (const p of session.players ?? []) this.remotes.ensure(p);
 
@@ -84,6 +107,43 @@ export class Netplay {
     c.on('fire', (msg) => this.remotes.fire(msg));
 
     c.on('hit', (msg) => this._onIncomingHit(msg));
+
+    // ---- hostiles
+
+    c.on('bots', (msg) => this.puppets?.apply(msg.list, performance.now() / 1000));
+
+    // AI bolt replica: visual only (damage 0) — real damage arrives as 'aihit'.
+    c.on('botFire', (msg) => {
+      const origin = new THREE.Vector3().fromArray(msg.from);
+      this.game.projectiles.spawn({
+        origin,
+        direction: new THREE.Vector3().fromArray(msg.dir),
+        speed: msg.s,
+        damage: 0,
+        faction: 'enemy',
+        owner: null,
+        color: 0xff8a5c,
+      });
+      this.game.projectiles.flash(origin, 0xffb07a, 30);
+      this.game.audio?.enemyShoot?.('enemy');
+    });
+
+    // Sim host: another player shot one of our real hostiles.
+    c.on('botHit', (msg) => {
+      const enemy = this.game.enemies.find((e) => e._netId === msg.bot && !e.isDead);
+      if (!enemy) return;
+      enemy.lastHitWasHeadshot = !!msg.headshot;
+      enemy.killedByPlayer = false; // last hitter wins the credit
+      enemy._lastShotBy = msg.from;
+      enemy.lastHitFaction = 'player';
+      enemy.takeDamage(msg.damage);
+    });
+
+    // The sim host's AI got us.
+    c.on('aihit', (msg) => this._onIncomingHit({ from: null, damage: msg.damage, ai: true }));
+
+    // The previous sim host left — we inherit the AI.
+    c.on('simHost', () => this._becomeSimHost());
 
     c.on('kill', (msg) => this._onKill(msg));
 
@@ -144,14 +204,70 @@ export class Netplay {
 
     this._lastAttacker = msg.from;
     this._lastAttackHeadshot = !!msg.headshot;
+    this._lastHitWasAI = !!msg.ai;
     player.takeDamage(msg.damage);
     this.game.cameraRig?.addShake(CONFIG.camera.shakeOnHit);
 
     if (!player.alive) {
       // Our death is ours to announce; the server turns it into a kill.
-      this.client.send({ t: 'death', killer: this._lastAttacker, headshot: this._lastAttackHeadshot });
+      this.client.send({
+        t: 'death',
+        killer: this._lastAttacker,
+        headshot: this._lastAttackHeadshot,
+        ai: this._lastHitWasAI,
+      });
       this._respawnAt = player.time + RESPAWN_DELAY;
     }
+  }
+
+  /** Promoted to sim host mid-match: spawn a fresh set of real hostiles. */
+  _becomeSimHost() {
+    if (this.simHost) return;
+    this.simHost = true;
+    // Puppets stop receiving snapshots and stale out on their own while the
+    // real actors spawn in.
+    this.game.hud.showToast('HOSTILE CONTROL TRANSFERRED TO YOU', 0xff9a3c);
+    this.game._spawnSquads(CONFIG.enemy.mpCount ?? 8);
+  }
+
+  /** Sim host: stream the AI's state to everyone else. */
+  _sendBots() {
+    const list = [];
+    for (const e of this.game.enemies) {
+      if (e.removed) continue;
+      if (!e._netId) {
+        e._netId = this._nextBotId++;
+        // Replicate this actor's bolts so everyone sees and hears its fire.
+        e.onFireShot = (origin, dir, speed) => {
+          this.client.send({
+            t: 'botFire',
+            from: [+origin.x.toFixed(2), +origin.y.toFixed(2), +origin.z.toFixed(2)],
+            dir: [+dir.x.toFixed(3), +dir.y.toFixed(3), +dir.z.toFixed(3)],
+            s: speed,
+          });
+        };
+      }
+
+      // Death transition → credit whoever landed the last hit.
+      if (e.isDead && !e._deathReported) {
+        e._deathReported = true;
+        const by = e.killedByPlayer ? this.myId : e._lastShotBy ?? null;
+        if (by !== null) {
+          this.client.send({ t: 'botKill', by, headshot: !!e.lastHitWasHeadshot });
+        }
+      }
+
+      list.push([
+        e._netId,
+        +e.position.x.toFixed(2),
+        +e.position.y.toFixed(2),
+        +e.position.z.toFixed(2),
+        +e.facing.toFixed(3),
+        Math.round(e.health),
+        e.isDead ? 1 : 0,
+      ]);
+    }
+    this.client.send({ t: 'bots', list });
   }
 
   _onKill(msg) {
@@ -181,11 +297,25 @@ export class Netplay {
   update(dt) {
     const now = performance.now() / 1000;
     this.remotes.update(dt, now);
+    this.puppets?.update(dt, now);
 
     this._sendAccum += dt;
     if (this._sendAccum >= 1 / SEND_HZ) {
       this._sendAccum %= 1 / SEND_HZ;
       this._sendState();
+    }
+
+    if (this.bots && this.simHost) {
+      // The AI needs the other players on its target list, and only the sim
+      // host's world has authoritative AI.
+      this.game.world.remotes = [...this.remotes.players.values()].filter(
+        (p) => p && p.alive && p.body,
+      );
+      this._botsAccum += dt;
+      if (this._botsAccum >= 1 / BOTS_HZ) {
+        this._botsAccum %= 1 / BOTS_HZ;
+        this._sendBots();
+      }
     }
 
     // Auto-redeploy, Call of Duty style — no button needed.
@@ -226,6 +356,7 @@ export class Netplay {
 
   dispose() {
     this.remotes.dispose();
+    this.puppets?.dispose();
     this.client.close();
   }
 }

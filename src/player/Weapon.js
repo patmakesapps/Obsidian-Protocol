@@ -334,6 +334,7 @@ export class Weapon {
       // killing blow arrived and can score the headshot.
       owner.lastHitWasHeadshot = isHead;
       owner.killedByPlayer = true;
+      owner.lastHitFaction = 'player';
 
       owner.takeDamage(damage, end, this._dir);
       this.hud?.showHitmarker(isHead);

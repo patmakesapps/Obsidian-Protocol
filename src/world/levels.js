@@ -1,5 +1,6 @@
 import { Level } from './Level.js';
 import { JungleLevel } from './JungleLevel.js';
+import { ArenaLevel } from './ArenaLevel.js';
 import { CONFIG } from '../config.js';
 import { isUnlocked } from '../game/progress.js';
 
@@ -32,6 +33,16 @@ export const LEVELS = {
     loadingLabel: 'SEEDING THE BASIN',
     order: 1,
     requires: 'arcology',
+  },
+  pit: {
+    id: 'pit',
+    name: 'THE PIT',
+    Level: ArenaLevel,
+    sky: 'pit',
+    loadingLabel: 'FORGING THE PIT',
+    order: 2,
+    // Always open: it's the multiplayer arena, and a fine skirmish map solo.
+    requires: null,
   },
 };
 

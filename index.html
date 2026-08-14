@@ -120,25 +120,53 @@
         <div id="overlay-rule"><i></i><span></span><i></i></div>
         <p id="overlay-status">Loading…</p>
 
-        <!-- Populated from the level registry in src/world/levels.js, so a new
-             level needs no markup change. -->
-        <div id="level-select" class="hidden">
-          <span class="ls-label">DEPLOYMENT ZONE</span>
-          <div id="level-options"></div>
+        <!-- Mode tabs: one panel visible at a time keeps the menu to a few
+             decisions rather than one long stack. -->
+        <div id="menu-tabs">
+          <button type="button" class="menu-tab active" data-panel="panel-campaign">CAMPAIGN</button>
+          <button type="button" class="menu-tab" data-panel="panel-mp">MULTIPLAYER</button>
         </div>
 
-        <!-- Multiplayer lobby. Create shares a 4-letter code; joining takes
-             one. The server address defaults to the machine serving the page,
-             so LAN play needs no configuration. -->
-        <div id="mp-section">
-          <span class="ls-label">MULTIPLAYER · FREE-FOR-ALL</span>
-          <div class="mp-row">
-            <input id="mp-name" maxlength="16" placeholder="CALLSIGN" autocomplete="off" spellcheck="false" />
-            <button id="mp-create" type="button" class="mp-btn">CREATE MATCH</button>
+        <div id="panel-campaign" class="menu-panel">
+          <!-- Populated from the level registry in src/world/levels.js, so a new
+               level needs no markup change. -->
+          <div id="level-select" class="hidden">
+            <span class="ls-label">DEPLOYMENT ZONE</span>
+            <div id="level-options"></div>
           </div>
+        </div>
+
+        <div id="panel-mp" class="menu-panel hidden">
+          <div class="mp-grid">
+            <div class="mp-field">
+              <span class="ls-label">CALLSIGN</span>
+              <input id="mp-name" maxlength="16" placeholder="CALLSIGN" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="mp-field">
+              <span class="ls-label">CHARACTER</span>
+              <div id="char-options">
+                <button type="button" class="pick-option" data-char="ivory"><i class="chip" style="background:#dfe3ef"></i>IVORY</button>
+                <button type="button" class="pick-option" data-char="obsidian"><i class="chip" style="background:#23242e"></i>OBSIDIAN</button>
+                <button type="button" class="pick-option" data-char="drone"><i class="chip" style="background:#ff9a3c"></i>DRONE</button>
+              </div>
+            </div>
+            <div class="mp-field">
+              <span class="ls-label">ARENA</span>
+              <div id="mp-level-options"></div>
+            </div>
+            <div class="mp-field">
+              <span class="ls-label">HOSTILES</span>
+              <div id="bots-options">
+                <button type="button" class="pick-option" data-bots="0">PLAYERS ONLY</button>
+                <button type="button" class="pick-option" data-bots="1">AI JOINS THE FIGHT</button>
+              </div>
+            </div>
+          </div>
+
           <div class="mp-row">
+            <button id="mp-create" type="button" class="mp-btn">CREATE MATCH</button>
             <input id="mp-code" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false" />
-            <button id="mp-join" type="button" class="mp-btn">JOIN MATCH</button>
+            <button id="mp-join" type="button" class="mp-btn">JOIN</button>
             <button id="mp-board-toggle" type="button" class="mp-btn ghost">LEADERBOARD</button>
           </div>
           <div id="mp-status"></div>

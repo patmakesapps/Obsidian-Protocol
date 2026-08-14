@@ -77,6 +77,24 @@ export const SKY_PRESETS = {
     worldSize: 430,
   },
 
+  // The Pit: a sodium-and-violet dusk over a walled arena. Warmer horizon than
+  // the arcology so the two purple levels don't read as the same place.
+  pit: {
+    sunDir: [0.42, 0.66, -0.62],
+    horizon: 0xf2c9a8,
+    zenith: 0x241238,
+    ground: 0x9a7f96,
+    sunColor: 0xffe9c9,
+    bloomColor: 0xff9a5c,
+    stars: 0.55,
+    gradient: 0.5,
+    sunLight: { color: 0xffe8d0, intensity: 3.0 },
+    bounce: { color: PALETTE.purpleBright, intensity: 0.75, position: [-30, 20, 40] },
+    ambient: { sky: 0xe8d8ee, ground: 0x5c4a66, intensity: 1.05 },
+    fog: { color: 0xc4a898, density: 0.003 },
+    worldSize: 140,
+  },
+
   // Verdant Basin: humid mid-morning. The fog is deliberately dense — it hides
   // the point where the cliff ring stops being geometry, and the shafts of it
   // between the trees are most of what sells the place.

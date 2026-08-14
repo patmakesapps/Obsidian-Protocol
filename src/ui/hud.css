@@ -762,6 +762,11 @@ body {
   z-index: 2;
   max-width: 760px;
   padding: 40px;
+  /* The multiplayer panel can outgrow a short window — scroll the menu
+     rather than letting it collide with the footer strip. */
+  max-height: calc(100vh - 70px);
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 #overlay-tag {
@@ -1069,7 +1074,7 @@ kbd {
 
 /* Start-screen lobby. Sits between the level picker and the deploy button;
    the same angled-chip language as the rest of the menu. */
-#mp-section {
+#panel-mp {
   margin: 0 0 30px;
   pointer-events: auto;
 }
@@ -1081,7 +1086,7 @@ kbd {
   margin-bottom: 10px;
 }
 
-#mp-section input {
+#panel-mp input {
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -1096,7 +1101,7 @@ kbd {
   clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
 }
 
-#mp-section input:focus {
+#panel-mp input:focus {
   border-color: rgba(196, 166, 255, 0.65);
 }
 
@@ -1342,4 +1347,93 @@ kbd {
   letter-spacing: 0.3em;
   text-indent: 0.3em;
   color: var(--hud-cyan);
+}
+
+/* ------------------------------------------------- menu tabs & mp pickers */
+
+#menu-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 22px;
+  pointer-events: auto;
+}
+
+.menu-tab {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  padding: 12px 30px;
+  color: rgba(214, 205, 245, 0.5);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid rgba(196, 166, 255, 0.16);
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s;
+}
+
+.menu-tab:hover {
+  color: #f0eaff;
+}
+
+.menu-tab.active {
+  color: #f0eaff;
+  border-bottom-color: #c4a6ff;
+  text-shadow: 0 0 18px rgba(196, 166, 255, 0.55);
+}
+
+.menu-panel {
+  min-height: 150px;
+  margin-bottom: 26px;
+}
+
+/* Field grid: label + picker pairs, centred, two columns on wide screens. */
+.mp-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.mp-field .ls-label {
+  margin-bottom: 8px;
+}
+
+.pick-option {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  padding: 9px 16px;
+  margin: 0 4px;
+  color: rgba(214, 205, 245, 0.62);
+  background: rgba(139, 92, 246, 0.07);
+  border: 1px solid rgba(196, 166, 255, 0.2);
+  cursor: pointer;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+
+.pick-option:hover {
+  color: #f0eaff;
+  border-color: rgba(196, 166, 255, 0.5);
+}
+
+.pick-option.active {
+  color: #0b0616;
+  background: linear-gradient(135deg, #c4a6ff, #8b5cf6);
+  border-color: #d9c6ff;
+}
+
+.pick-option .chip {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  border: 1px solid rgba(13, 13, 19, 0.4);
 }

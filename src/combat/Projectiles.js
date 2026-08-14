@@ -242,7 +242,10 @@ export class Projectiles {
     const owner = hit.owner;
     const point = new THREE.Vector3(hit.point.x, hit.point.y, hit.point.z);
 
-    if (owner && typeof owner.takeDamage === 'function') {
+    // Zero-damage bolts are multiplayer visual replicas — the authoritative
+    // damage travels over the wire, so these must only ever spark.
+    if (owner && typeof owner.takeDamage === 'function' && p.damage > 0) {
+      owner.lastHitFaction = p.faction;
       owner.takeDamage(p.damage, point, p.direction);
       if (owner.isPlayer) this.onPlayerHit?.(p);
       this._impacts.spawn(point, hit.normal, 0xff7a9a);
