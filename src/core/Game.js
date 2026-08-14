@@ -176,6 +176,11 @@ export class Game {
       // Shielded through the first moments after deploying, same as a respawn.
       this.player.invulnUntil = this.player.time + 2.5;
 
+      // In first person you never see your own body — the weapon is the only
+      // part of "you" on screen. Dress it as your character so the pick is
+      // visible even in an empty match.
+      this._applyCharacterSkin(this.netSession.session.char);
+
       // Hostiles are an opt-in match setting, simulated by exactly one client
       // (the sim host) and streamed to the rest.
       if (this.netSession.session.bots && this.netSession.session.simHost) {
@@ -241,6 +246,38 @@ export class Game {
     this._render();
 
     return this;
+  }
+
+  /**
+   * Tints every carried weapon's viewmodel to match the chosen character.
+   * Materials are cloned first — the source GLB materials are shared through
+   * the asset cache, and the tint belongs to this player's hands only.
+   */
+  _applyCharacterSkin(charId) {
+    const skins = {
+      obsidian: { color: 0x2e2f3b, emissive: null },
+      drone: { color: 0x3d414e, emissive: 0xff9a3c, emissiveIntensity: 0.55 },
+    };
+    const skin = skins[charId];
+    if (!skin) return; // ivory keeps the stock white rifles
+
+    const tint = new THREE.Color(skin.color);
+    for (const weapon of this.loadout?.weapons ?? []) {
+      weapon.viewmodel.traverse((n) => {
+        if (!n.isMesh || !n.material) return;
+        const mats = Array.isArray(n.material) ? n.material : [n.material];
+        const cloned = mats.map((m) => {
+          const copy = m.clone();
+          copy.color?.multiply(tint);
+          if (skin.emissive && copy.emissive) {
+            copy.emissive.setHex(skin.emissive);
+            copy.emissiveIntensity = skin.emissiveIntensity;
+          }
+          return copy;
+        });
+        n.material = Array.isArray(n.material) ? cloned : cloned[0];
+      });
+    }
   }
 
   async _createWeapon(def) {

@@ -10,6 +10,24 @@ const overlay = document.getElementById('overlay');
 const status = document.getElementById('overlay-status');
 const startButton = document.getElementById('start-button');
 
+// localStorage can be blocked outright (strict privacy modes, managed
+// corporate browsers). Preferences then just don't persist — nothing may
+// throw, and nothing may silently fall back to a wrong value elsewhere.
+function storageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* not persistable — session-only */
+  }
+}
+
 /** Navigates to a level. A reload is the level-change mechanism — see below. */
 function goToLevel(id) {
   const url = new URL(window.location.href);
@@ -72,11 +90,11 @@ function mpParams() {
     room: (p.get('room') ?? '').toUpperCase(),
     // No name in the URL (an invite link someone clicked) — use their own
     // saved callsign, so a shared link doesn't hand out the sender's name.
-    name: p.get('name') ?? localStorage.getItem('op-callsign') ?? '',
+    name: p.get('name') ?? storageGet('op-callsign') ?? '',
     // Character travels in the URL explicitly: whatever the carousel showed
     // when CREATE/JOIN was clicked wins, no storage-timing games. Invite
     // clickers have no char param and fall back to their own saved pick.
-    char: p.get('char') ?? localStorage.getItem('op-character') ?? 'ivory',
+    char: p.get('char') ?? storageGet('op-character') ?? 'ivory',
   };
 }
 
@@ -109,7 +127,7 @@ function goToMatch(levelId, code, name, char) {
 
 /** The player's saved multiplayer character, defaulting to the white trooper. */
 function savedCharacter() {
-  const char = localStorage.getItem('op-character');
+  const char = storageGet('op-character');
   return ['ivory', 'obsidian', 'drone'].includes(char) ? char : 'ivory';
 }
 
@@ -138,7 +156,7 @@ function setupMenuTabs(inMatch) {
 }
 
 /** Lobby controls on the start screen: create, join, leaderboard. */
-function setupMultiplayerMenu() {
+function setupMultiplayerMenu(mp = null) {
   const nameInput = document.getElementById('mp-name');
   const codeInput = document.getElementById('mp-code');
   const createBtn = document.getElementById('mp-create');
@@ -148,7 +166,7 @@ function setupMultiplayerMenu() {
   const boardRows = document.getElementById('mp-board-rows');
   if (!nameInput || !createBtn) return;
 
-  nameInput.value = localStorage.getItem('op-callsign') ?? '';
+  nameInput.value = storageGet('op-callsign') ?? '';
 
   // Character carousel — a live 3D model of each pick, arrows to cycle.
   const charList = Object.entries(CHARACTERS).map(([id, def]) => ({
@@ -169,7 +187,7 @@ function setupMultiplayerMenu() {
       charDots?.appendChild(dot);
     }
     const syncChar = (char) => {
-      localStorage.setItem('op-character', char.id);
+      storageSet('op-character', char.id);
       if (charName) charName.textContent = char.label;
       [...(charDots?.children ?? [])].forEach((d, i) =>
         d.classList.toggle('active', charList[i].id === char.id),
@@ -177,7 +195,10 @@ function setupMultiplayerMenu() {
     };
     preview = new CharacterPreview(charCanvas, charList);
     preview.onChange = syncChar;
-    preview.setCharById(savedCharacter());
+    // On a match page the URL's character is the truth (it's what the join
+    // used) — never let a blocked localStorage reset the carousel to default.
+    const startChar = mp?.active ? mp.char : savedCharacter();
+    preview.setCharById(['ivory', 'obsidian', 'drone'].includes(startChar) ? startChar : 'ivory');
     syncChar(preview.current);
     document.getElementById('char-prev')?.addEventListener('click', () => preview.prev());
     document.getElementById('char-next')?.addEventListener('click', () => preview.next());
@@ -185,11 +206,11 @@ function setupMultiplayerMenu() {
 
   // Arena cycler — multiplayer can use any level, locks don't apply.
   const arenas = levelList();
-  let arenaIndex = Math.max(0, arenas.findIndex((l) => l.id === (localStorage.getItem('op-mp-level') ?? 'pit')));
+  let arenaIndex = Math.max(0, arenas.findIndex((l) => l.id === (storageGet('op-mp-level') ?? 'pit')));
   const arenaName = document.getElementById('arena-name');
   const syncArena = () => {
     if (arenaName) arenaName.textContent = arenas[arenaIndex].name;
-    localStorage.setItem('op-mp-level', arenas[arenaIndex].id);
+    storageSet('op-mp-level', arenas[arenaIndex].id);
   };
   syncArena();
   document.getElementById('arena-prev')?.addEventListener('click', () => {
@@ -203,10 +224,10 @@ function setupMultiplayerMenu() {
   const mpLevelId = () => arenas[arenaIndex].id;
 
   // Hostiles switch — whether AI joins the deathmatch.
-  let bots = localStorage.getItem('op-mp-bots') === '1';
+  let bots = storageGet('op-mp-bots') === '1';
   const botsSwitch = document.getElementById('bots-switch');
   const syncBots = () => {
-    localStorage.setItem('op-mp-bots', bots ? '1' : '0');
+    storageSet('op-mp-bots', bots ? '1' : '0');
     botsSwitch?.classList.toggle('on', bots);
     botsSwitch?.setAttribute('aria-pressed', String(bots));
     const label = botsSwitch?.querySelector('span');
@@ -220,7 +241,7 @@ function setupMultiplayerMenu() {
 
   const callsign = () => {
     const name = nameInput.value.trim().toUpperCase() || 'OPERATIVE';
-    localStorage.setItem('op-callsign', name);
+    storageSet('op-callsign', name);
     return name;
   };
 
@@ -323,7 +344,7 @@ async function boot() {
   // and a mis-click doesn't mean waiting out a load first.
   buildLevelSelect(active.id);
   setupMenuTabs(mp.active);
-  setupMultiplayerMenu();
+  setupMultiplayerMenu(mp);
 
   let netSession = null;
   if (mp.active) {
@@ -360,8 +381,12 @@ async function boot() {
     window.history.replaceState(null, '', cleanUrl);
 
     const others = netSession.session.players.length;
+    const charLabel = CHARACTERS[netSession.session.char]?.label ?? '';
     status.textContent = `MATCH ${netSession.session.code} · ${others + 1} OPERATIVE${others ? 'S' : ''} IN`;
-    setMpStatus(`IN MATCH ${netSession.session.code} — SEND THIS PAGE'S URL TO INVITE`, 'good');
+    setMpStatus(
+      `IN MATCH ${netSession.session.code} AS ${charLabel} — SEND THIS PAGE'S URL TO INVITE`,
+      'good',
+    );
   } else {
     status.textContent = 'ALL SYSTEMS NOMINAL';
   }

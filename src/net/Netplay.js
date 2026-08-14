@@ -33,8 +33,14 @@ export class Netplay {
 
     this.rows = session.rows ?? [];
     // What the server accepted at join — the single source of truth for what
-    // everyone else renders us as.
-    this.myChar = normalizeChar(session.char ?? localStorage.getItem('op-character'));
+    // everyone else renders us as. Storage is a last resort and may be blocked.
+    let stored = null;
+    try {
+      stored = localStorage.getItem('op-character');
+    } catch {
+      /* blocked storage */
+    }
+    this.myChar = normalizeChar(session.char ?? stored);
     this._sendAccum = 0;
     this._lastAttacker = null;
     this._lastAttackerAt = -99;
