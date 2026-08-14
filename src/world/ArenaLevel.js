@@ -26,27 +26,33 @@ export class ArenaLevel {
     this.coverPoints = [];
     this._blockers = [];
 
+    // The Pit inverts the game's usual palette: where the arcology is white
+    // architecture with violet light, this is polished obsidian with molten
+    // amber seams — a black-site fighting pit, not a city block.
     this._shell = new THREE.MeshStandardMaterial({
-      color: PALETTE.white,
-      roughness: 0.6,
-      metalness: 0.1,
+      color: 0x757b8f,
+      roughness: 0.55,
+      metalness: 0.2,
     });
     this._dark = new THREE.MeshStandardMaterial({
-      color: PALETTE.charcoal,
-      roughness: 0.7,
-      metalness: 0.25,
+      color: 0x3c3f4e,
+      roughness: 0.65,
+      metalness: 0.18,
     });
+    // Molten amber — the arena's primary accent.
     this._glow = new THREE.MeshStandardMaterial({
       color: PALETTE.black,
-      emissive: PALETTE.purple,
-      emissiveIntensity: 1.7,
+      emissive: PALETTE.amber,
+      emissiveIntensity: 3.0,
       roughness: 0.35,
       metalness: 0.5,
     });
+    // Violet kept as the rare secondary accent so it still reads as the same
+    // universe — pylon caps and the centre ring only.
     this._amberGlow = new THREE.MeshStandardMaterial({
       color: PALETTE.black,
-      emissive: PALETTE.amber,
-      emissiveIntensity: 1.5,
+      emissive: PALETTE.purple,
+      emissiveIntensity: 1.9,
       roughness: 0.35,
       metalness: 0.5,
     });
@@ -94,13 +100,34 @@ export class ArenaLevel {
       { type: 'ground' },
     );
 
-    // Dark cross-lanes marking the four approaches to the middle.
+    // Cross-lanes to the middle: a dark runway with a molten seam down the
+    // centre of each — the seams are the arena's main light source read.
     const lane = new THREE.Mesh(new THREE.PlaneGeometry(3.4, ARENA), this._dark);
     lane.rotation.x = -Math.PI / 2;
     lane.position.y = 0.01;
     const lane2 = lane.clone();
     lane2.rotation.z = Math.PI / 2;
     this.scene.add(lane, lane2);
+
+    const seam = new THREE.Mesh(new THREE.PlaneGeometry(0.8, ARENA), this._glow);
+    seam.rotation.x = -Math.PI / 2;
+    seam.position.y = 0.02;
+    const seam2 = seam.clone();
+    seam2.rotation.z = Math.PI / 2;
+    this.scene.add(seam, seam2);
+
+    // Thin molten border where the floor meets the walls.
+    for (const [x, z, w, d] of [
+      [0, -ARENA / 2 + 1.2, ARENA - 4, 0.3],
+      [0, ARENA / 2 - 1.2, ARENA - 4, 0.3],
+      [-ARENA / 2 + 1.2, 0, 0.3, ARENA - 4],
+      [ARENA / 2 - 1.2, 0, 0.3, ARENA - 4],
+    ]) {
+      const edge = new THREE.Mesh(new THREE.PlaneGeometry(w, d), this._glow);
+      edge.rotation.x = -Math.PI / 2;
+      edge.position.set(x, 0.02, z);
+      this.scene.add(edge);
+    }
   }
 
   // ------------------------------------------------------------------ walls
@@ -281,9 +308,9 @@ export class ArenaLevel {
     void rand; // seed reserved for future scatter passes
   }
 
-  /** Violet floor ribbons circling the platform — pure dressing. */
+  /** Violet ring circling the platform — the one cool accent in a hot arena. */
   _buildLightRibbons() {
-    const ring = new THREE.Mesh(new THREE.RingGeometry(11.4, 11.9, 64), this._glow);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(11.4, 11.9, 64), this._amberGlow);
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.02;
     this.scene.add(ring);

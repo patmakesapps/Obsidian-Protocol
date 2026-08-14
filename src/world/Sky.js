@@ -77,21 +77,22 @@ export const SKY_PRESETS = {
     worldSize: 430,
   },
 
-  // The Pit: a sodium-and-violet dusk over a walled arena. Warmer horizon than
-  // the arcology so the two purple levels don't read as the same place.
+  // The Pit: an ember night over black glass. Deliberately the anti-arcology —
+  // near-black world, low smouldering horizon, warm key light — so the arena
+  // reads as its own place, not another city block.
   pit: {
-    sunDir: [0.42, 0.66, -0.62],
-    horizon: 0xf2c9a8,
-    zenith: 0x241238,
-    ground: 0x9a7f96,
-    sunColor: 0xffe9c9,
-    bloomColor: 0xff9a5c,
-    stars: 0.55,
-    gradient: 0.5,
-    sunLight: { color: 0xffe8d0, intensity: 3.0 },
-    bounce: { color: PALETTE.purpleBright, intensity: 0.75, position: [-30, 20, 40] },
-    ambient: { sky: 0xe8d8ee, ground: 0x5c4a66, intensity: 1.05 },
-    fog: { color: 0xc4a898, density: 0.003 },
+    sunDir: [0.5, 0.38, -0.78],
+    horizon: 0xc96a3a,
+    zenith: 0x07030c,
+    ground: 0x2a140c,
+    sunColor: 0xffc890,
+    bloomColor: 0xff702e,
+    stars: 0.85,
+    gradient: 0.38,
+    sunLight: { color: 0xffd0a0, intensity: 3.4 },
+    bounce: { color: 0xff9a5c, intensity: 1.0, position: [-30, 14, 40] },
+    ambient: { sky: 0xc49a84, ground: 0x2e1e1a, intensity: 1.6 },
+    fog: { color: 0x40241a, density: 0.003 },
     worldSize: 140,
   },
 
