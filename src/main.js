@@ -109,7 +109,7 @@ function savedCharacter() {
 }
 
 /** CAMPAIGN / MULTIPLAYER tabs; one panel visible at a time. */
-function setupMenuTabs(startInMp) {
+function setupMenuTabs(inMatch) {
   const tabs = [...document.querySelectorAll('.menu-tab')];
   const select = (panelId) => {
     for (const tab of tabs) {
@@ -120,9 +120,16 @@ function setupMenuTabs(startInMp) {
     // The multiplayer panel is tall; the fixed footer strip would overlap it
     // on smaller windows, and its keybind hints are campaign trivia anyway.
     document.getElementById('overlay-foot')?.classList.toggle('hidden', panelId === 'panel-mp');
+
+    // DEPLOY on the multiplayer tab without a match would silently start a
+    // SOLO campaign game — the classic "why is nobody in my server". The
+    // button only appears there once you're actually in a match; until then
+    // CREATE / JOIN are the only ways forward.
+    const startButton = document.getElementById('start-button');
+    startButton?.classList.toggle('hidden', panelId === 'panel-mp' && !inMatch);
   };
   for (const tab of tabs) tab.addEventListener('click', () => select(tab.dataset.panel));
-  if (startInMp) select('panel-mp');
+  if (inMatch) select('panel-mp');
 }
 
 /** Lobby controls on the start screen: create, join, leaderboard. */

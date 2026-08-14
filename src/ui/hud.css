@@ -1672,3 +1672,10 @@ kbd {
 #mp-leaderboard {
   margin-top: 20px;
 }
+
+#mp-build {
+  align-self: flex-end;
+  font-size: 8px;
+  letter-spacing: 0.3em;
+  color: rgba(214, 205, 245, 0.28);
+}
