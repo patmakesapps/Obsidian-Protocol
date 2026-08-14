@@ -5,6 +5,7 @@
   "description": "A first-person sci-fi shooter built with Three.js and Rapier.",
   "type": "module",
   "scripts": {
+    "start": "node server/launch.mjs",
     "dev": "vite",
     "dev:lan": "vite --host",
     "build": "vite build && node tools/prune-dist.mjs",

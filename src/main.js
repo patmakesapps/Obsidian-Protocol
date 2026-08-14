@@ -68,7 +68,9 @@ function mpParams() {
   return {
     active: p.get('mp') === '1' && !!p.get('room'),
     room: (p.get('room') ?? '').toUpperCase(),
-    name: p.get('name') ?? '',
+    // No name in the URL (an invite link someone clicked) — use their own
+    // saved callsign, so a shared link doesn't hand out the sender's name.
+    name: p.get('name') ?? localStorage.getItem('op-callsign') ?? '',
   };
 }
 
@@ -243,9 +245,15 @@ async function boot() {
   }
 
   if (netSession) {
+    // Drop the name param so the address bar becomes a clean invite link:
+    // anyone who clicks it joins this match under their own callsign.
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('name');
+    window.history.replaceState(null, '', cleanUrl);
+
     const others = netSession.session.players.length;
-    status.textContent = `MATCH ${netSession.session.code} · ${others + 1} OPERATIVE${others ? 'S' : ''} · SHARE THE CODE`;
-    setMpStatus(`IN MATCH ${netSession.session.code} — SHARE THE CODE TO INVITE`, 'good');
+    status.textContent = `MATCH ${netSession.session.code} · ${others + 1} OPERATIVE${others ? 'S' : ''} IN`;
+    setMpStatus(`IN MATCH ${netSession.session.code} — SEND THIS PAGE'S URL TO INVITE`, 'good');
   } else {
     status.textContent = 'ALL SYSTEMS NOMINAL';
   }
