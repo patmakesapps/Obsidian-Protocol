@@ -380,6 +380,7 @@ function handleMessage(client, msg) {
         simHost: room.simHostId === client.id,
         name: client.name,
         color: client.color,
+        char: client.char,
         players: room.roster().filter((p) => p.id !== client.id),
         rows: room.scores(),
         limit: KILL_LIMIT,

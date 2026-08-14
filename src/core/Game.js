@@ -173,6 +173,8 @@ export class Game {
         client: this.netSession.client,
         session: this.netSession.session,
       });
+      // Shielded through the first moments after deploying, same as a respawn.
+      this.player.invulnUntil = this.player.time + 2.5;
 
       // Hostiles are an opt-in match setting, simulated by exactly one client
       // (the sim host) and streamed to the rest.
@@ -191,12 +193,16 @@ export class Game {
         assets: this.assets,
       });
 
+      // Small levels declare their own headcount; the campaign numbers are
+      // tuned for a 430m city, not a 96m arena.
+      const pop = this.levelDef.population ?? {};
+
       onProgress('SPAWNING SQUAD');
-      for (let i = 0; i < CONFIG.ally.count; i++) await this._spawnAlly(i);
+      for (let i = 0; i < (pop.allies ?? CONFIG.ally.count); i++) await this._spawnAlly(i);
 
       onProgress('DEPLOYING HOSTILES');
-      await this._spawnSquads(CONFIG.enemy.count);
-      for (let i = 0; i < CONFIG.drone.count; i++) await this._spawnDrone();
+      await this._spawnSquads(pop.enemies ?? CONFIG.enemy.count);
+      for (let i = 0; i < (pop.drones ?? CONFIG.drone.count); i++) await this._spawnDrone();
 
       this.objectives = new Objectives({
         scene: this.scene,
@@ -307,6 +313,13 @@ export class Game {
       this.objectives?.notifyKill();
       this.pendingSpawns.push({ at: this.elapsed + 8 + this.rand() * 8, kind: 'enemy' });
     };
+    // Multiplayer hostiles are a side dish, not the meal: they engage only
+    // when a player gets close, instead of the whole set swarming whoever
+    // spawned nearest. Applied here so respawned bots get the same manners.
+    if (this.mp) {
+      enemy.alerted = false;
+      enemy.cfg = { ...enemy.cfg, activationRange: 26 };
+    }
     this.enemies.push(enemy);
     return enemy;
   }

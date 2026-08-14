@@ -390,6 +390,9 @@ export class Player {
 
   takeDamage(amount) {
     if (!this.alive) return;
+    // Brief post-respawn shield (multiplayer sets it) — spawning into a
+    // crossfire and dying before you can turn around is just a queue.
+    if (this.invulnUntil !== undefined && this.time < this.invulnUntil) return;
     this.health -= amount;
     this.lastDamageTime = this.time;
     this.audio?.playerHurt();

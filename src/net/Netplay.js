@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
-import { RemotePlayers, normalizeChar } from './RemotePlayers.js';
+import { RemotePlayers, normalizeChar, CHARACTERS } from './RemotePlayers.js';
 import { Puppets } from './Puppets.js';
 
 // Movement state goes out at this rate. 15Hz + client-side interpolation reads
@@ -32,7 +32,9 @@ export class Netplay {
     this.matchState = session.state ?? 'live';
 
     this.rows = session.rows ?? [];
-    this.myChar = normalizeChar(localStorage.getItem('op-character'));
+    // What the server accepted at join — the single source of truth for what
+    // everyone else renders us as.
+    this.myChar = normalizeChar(session.char ?? localStorage.getItem('op-character'));
     this._sendAccum = 0;
     this._lastAttacker = null;
     this._lastAttackerAt = -99;
@@ -82,6 +84,11 @@ export class Netplay {
     this.game.hud.setScores?.(this.rows, this.myId, this.killLimit);
     // Announce our spawn right away so nobody renders us at the world origin.
     this._sendState();
+
+    // You can't see your own body in first person — confirm the pick loudly
+    // so "did my character apply" is never a mystery again.
+    const charLabel = CHARACTERS[this.myChar]?.label ?? this.myChar.toUpperCase();
+    this.game.hud.showToast(`DEPLOYED AS ${charLabel}`, this.myColor);
   }
 
   _wireHandlers() {
@@ -308,6 +315,7 @@ export class Netplay {
     const at = level.randomSpawnPoint?.(Math.random)?.clone() ?? new THREE.Vector3(0, 0.5, 6);
     at.y = (level.heightAt?.(at.x, at.z) ?? 0) + 0.5;
     player.respawn(at);
+    player.invulnUntil = player.time + 2.5; // spawn protection
     this.client.send({ t: 'respawn' });
     this._sendState(); // don't let others see a corpse at the old spot for a tick
   }
@@ -369,9 +377,10 @@ export class Netplay {
   _refreshObjective() {
     const mine = this.rows.find((r) => r.id === this.myId);
     const leader = this.rows[0];
+    const charLabel = CHARACTERS[this.myChar]?.label ?? '';
     this.game.hud.setObjective({
       title: `FREE-FOR-ALL · ${this.roomCode}`,
-      detail: `FIRST TO ${this.killLimit} ELIMINATIONS`,
+      detail: `FIRST TO ${this.killLimit} · YOU ARE ${charLabel}`,
       progress: leader
         ? `LEADER ${leader.name} ${leader.kills} · YOU ${mine?.kills ?? 0}`
         : '',

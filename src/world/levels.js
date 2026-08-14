@@ -43,6 +43,9 @@ export const LEVELS = {
     order: 2,
     // Always open: it's the multiplayer arena, and a fine skirmish map solo.
     requires: null,
+    // A 96m box cannot hold the campaign population — the full 26 hostiles
+    // plus drones is an instant death sentence at spawn.
+    population: { enemies: 9, drones: 2, allies: 2 },
   },
 };
 

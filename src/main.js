@@ -73,6 +73,10 @@ function mpParams() {
     // No name in the URL (an invite link someone clicked) — use their own
     // saved callsign, so a shared link doesn't hand out the sender's name.
     name: p.get('name') ?? localStorage.getItem('op-callsign') ?? '',
+    // Character travels in the URL explicitly: whatever the carousel showed
+    // when CREATE/JOIN was clicked wins, no storage-timing games. Invite
+    // clickers have no char param and fall back to their own saved pick.
+    char: p.get('char') ?? localStorage.getItem('op-character') ?? 'ivory',
   };
 }
 
@@ -93,12 +97,13 @@ function setMpStatus(text, kind = '') {
  * it's the match-join mechanism too — the room code survives in the URL and
  * the socket reconnects on the other side.
  */
-function goToMatch(levelId, code, name) {
+function goToMatch(levelId, code, name, char) {
   const url = new URL(window.location.href);
   url.searchParams.set('level', levelId);
   url.searchParams.set('mp', '1');
   url.searchParams.set('room', code);
   url.searchParams.set('name', name);
+  if (char) url.searchParams.set('char', char);
   window.location.assign(url);
 }
 
@@ -233,7 +238,8 @@ function setupMultiplayerMenu() {
       const reply = await client.request({ t: 'create', level: mpLevelId(), bots }, ['created', 'error']);
       client.close();
       if (reply.t === 'error') throw new Error(reply.message);
-      goToMatch(mpLevelId(), reply.code, callsign());
+      // The carousel's CURRENT model is the character, full stop.
+      goToMatch(mpLevelId(), reply.code, callsign(), preview?.current.id ?? savedCharacter());
     } catch (err) {
       setMpStatus(err.message ?? 'SERVER UNREACHABLE', 'error');
       busy(false);
@@ -254,7 +260,7 @@ function setupMultiplayerMenu() {
       client.close();
       if (reply.t === 'error') throw new Error(reply.message);
       if (reply.players >= reply.max) throw new Error('MATCH FULL');
-      goToMatch(reply.level, code, callsign());
+      goToMatch(reply.level, code, callsign(), preview?.current.id ?? savedCharacter());
     } catch (err) {
       setMpStatus(err.message ?? 'SERVER UNREACHABLE', 'error');
       busy(false);
@@ -293,7 +299,7 @@ async function joinFromUrl(mp, activeLevelId) {
   const client = new NetClient(NetClient.defaultUrl());
   await client.connect();
   const session = await client.request(
-    { t: 'join', code: mp.room, name: mp.name || 'OPERATIVE', char: savedCharacter() },
+    { t: 'join', code: mp.room, name: mp.name || 'OPERATIVE', char: mp.char },
     ['joined', 'error'],
   );
   if (session.t === 'error') {
@@ -346,10 +352,11 @@ async function boot() {
   }
 
   if (netSession) {
-    // Drop the name param so the address bar becomes a clean invite link:
-    // anyone who clicks it joins this match under their own callsign.
+    // Drop the personal params so the address bar becomes a clean invite
+    // link: anyone who clicks it joins under their own callsign & character.
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete('name');
+    cleanUrl.searchParams.delete('char');
     window.history.replaceState(null, '', cleanUrl);
 
     const others = netSession.session.players.length;
