@@ -55,8 +55,11 @@ export function nextLevel(id) {
  */
 export function resolveLevel() {
   let requested = null;
+  let multiplayer = false;
   if (typeof window !== 'undefined') {
-    requested = new URLSearchParams(window.location.search).get('level');
+    const params = new URLSearchParams(window.location.search);
+    requested = params.get('level');
+    multiplayer = params.get('mp') === '1';
   }
 
   const id = requested ?? CONFIG.world.level;
@@ -66,7 +69,9 @@ export function resolveLevel() {
     console.warn(`[levels] unknown level "${id}" — falling back to "${CONFIG.world.level}".`);
     return LEVELS[CONFIG.world.level] ?? LEVELS.arcology;
   }
-  if (!isUnlocked(level)) {
+  // Multiplayer matches play on whatever level the match was created on —
+  // campaign progress belongs to the host, not to whoever joins.
+  if (!multiplayer && !isUnlocked(level)) {
     console.info(`[levels] "${id}" is locked — starting the campaign instead.`);
     return levelList()[0];
   }

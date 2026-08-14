@@ -398,12 +398,13 @@ export class Player {
     if (this.health <= 0) {
       this.health = 0;
       this.alive = false;
-      this.hud?.showDeath();
+      // In multiplayer the redeploy is automatic, so the prompt differs.
+      this.hud?.showDeath(this.net ? 'REDEPLOYING…' : undefined);
     }
   }
 
-  respawn() {
-    const spawn = new THREE.Vector3(0, 0.5, 6);
+  respawn(at = null) {
+    const spawn = at ?? new THREE.Vector3(0, 0.5, 6);
     this.position.copy(spawn);
     this.velocity.set(0, 0, 0);
     this.health = CONFIG.player.maxHealth;

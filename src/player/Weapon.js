@@ -313,6 +313,9 @@ export class Weapon {
     this.muzzle.getWorldPosition(this._muzzleWorld);
     this._spawnTracer(this._muzzleWorld, end);
 
+    // Multiplayer: everyone else draws this shot and hears it.
+    this.player.net?.onLocalFire(this._muzzleWorld, end, this.def.id);
+
     if (!hit) return;
 
     const owner = hit.owner;

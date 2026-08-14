@@ -1064,3 +1064,282 @@ kbd {
   letter-spacing: 0.24em;
   color: var(--hud-dim);
 }
+
+/* ------------------------------------------------------------ multiplayer */
+
+/* Start-screen lobby. Sits between the level picker and the deploy button;
+   the same angled-chip language as the rest of the menu. */
+#mp-section {
+  margin: 0 0 30px;
+  pointer-events: auto;
+}
+
+.mp-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+#mp-section input {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  width: 150px;
+  padding: 10px 14px;
+  color: #f0eaff;
+  background: rgba(13, 13, 19, 0.6);
+  border: 1px solid rgba(196, 166, 255, 0.25);
+  outline: none;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+}
+
+#mp-section input:focus {
+  border-color: rgba(196, 166, 255, 0.65);
+}
+
+#mp-code {
+  width: 96px !important;
+  text-align: center;
+}
+
+.mp-btn {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  padding: 10px 18px;
+  color: rgba(214, 205, 245, 0.85);
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(196, 166, 255, 0.3);
+  cursor: pointer;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+
+.mp-btn:hover {
+  color: #f0eaff;
+  border-color: rgba(196, 166, 255, 0.6);
+  background: rgba(139, 92, 246, 0.22);
+}
+
+.mp-btn.ghost {
+  background: transparent;
+  border-style: dashed;
+}
+
+.mp-btn:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+
+#mp-status {
+  min-height: 16px;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: var(--hud-dim);
+}
+
+#mp-status.error {
+  color: var(--hud-red);
+}
+
+#mp-status.good {
+  color: #6effc4;
+}
+
+#mp-leaderboard {
+  margin-top: 16px;
+}
+
+#mp-board-rows {
+  display: inline-block;
+  min-width: 340px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: rgba(214, 205, 245, 0.8);
+}
+
+.board-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 5px 12px;
+  border-bottom: 1px solid rgba(196, 166, 255, 0.12);
+}
+
+.board-row .b-rank {
+  color: rgba(214, 205, 245, 0.4);
+  width: 22px;
+  text-align: right;
+}
+
+.board-row .b-name {
+  flex: 1;
+  text-align: left;
+  color: #f0eaff;
+}
+
+.board-row .b-stat {
+  color: var(--hud-dim);
+}
+
+.board-row.head .b-name,
+.board-row.head .b-stat,
+.board-row.head .b-rank {
+  color: rgba(214, 205, 245, 0.42);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+}
+
+/* In-match kill feed, top right under the score. */
+#kill-feed {
+  position: absolute;
+  top: 118px;
+  right: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+
+.feed-line {
+  padding: 5px 12px;
+  background: rgba(13, 13, 19, 0.55);
+  border-right: 2px solid rgba(196, 166, 255, 0.45);
+  transition: opacity 0.5s;
+}
+
+.feed-line i {
+  font-style: normal;
+  color: rgba(214, 205, 245, 0.55);
+  margin: 0 4px;
+}
+
+.feed-line.out {
+  opacity: 0;
+}
+
+.feed-env {
+  color: rgba(214, 205, 245, 0.5);
+}
+
+/* Hold-Tab standings. */
+#scoreboard {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 460px;
+  padding: 22px 30px 26px;
+  background: rgba(10, 8, 20, 0.88);
+  border: 1px solid rgba(196, 166, 255, 0.3);
+  border-top: 2px solid rgba(196, 166, 255, 0.7);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  z-index: 40;
+}
+
+.sb-head {
+  margin-bottom: 14px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: var(--hud-cyan);
+}
+
+.sb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+.sb-table th {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: rgba(214, 205, 245, 0.42);
+  text-align: left;
+  padding: 4px 10px 8px;
+}
+
+.sb-table td {
+  padding: 6px 10px;
+  border-top: 1px solid rgba(196, 166, 255, 0.1);
+}
+
+.sb-table .sb-rank {
+  width: 26px;
+  color: rgba(214, 205, 245, 0.4);
+}
+
+.sb-table .sb-num {
+  width: 64px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.sb-table tr.me td {
+  background: rgba(139, 92, 246, 0.14);
+}
+
+/* Match end: winner banner + final standings + restart countdown. */
+#match-end {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 6, 22, 0.72);
+  backdrop-filter: blur(4px);
+  font-family: var(--hud-font);
+}
+
+.me-inner {
+  min-width: 480px;
+  text-align: center;
+  padding: 34px 44px;
+  background: rgba(13, 10, 26, 0.85);
+  border: 1px solid rgba(196, 166, 255, 0.35);
+  border-top: 2px solid rgba(196, 166, 255, 0.8);
+}
+
+.me-result {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  color: #dff2ff;
+  margin-bottom: 8px;
+}
+
+.me-result.won {
+  color: #6effc4;
+  text-shadow: 0 0 26px rgba(110, 255, 196, 0.5);
+}
+
+.me-winner {
+  font-size: 12px;
+  letter-spacing: 0.26em;
+  text-indent: 0.26em;
+  color: var(--hud-dim);
+  margin-bottom: 22px;
+}
+
+.me-countdown {
+  margin-top: 20px;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: var(--hud-cyan);
+}

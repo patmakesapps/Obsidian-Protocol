@@ -6,12 +6,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:lan": "vite --host",
     "build": "vite build && node tools/prune-dist.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server/index.mjs",
+    "play": "npm run build && node server/index.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.20.0",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "playwright-core": "^1.62.1",

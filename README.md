@@ -15,6 +15,69 @@ npm run dev      # http://127.0.0.1:5173
 npm run build    # production build to dist/
 ```
 
+## Multiplayer
+
+Free-for-all deathmatch, Call of Duty style: no AI in multiplayer — every
+combatant is a player. First to 20 eliminations wins, then the match resets
+after a short intermission. Every player carries both rifles from the start.
+
+```bash
+npm run server        # start the relay on :8081 (keep it running)
+npm run dev:lan       # dev client, reachable from other machines
+# — or, for a production setup —
+npm run play          # build, then serve game + relay together on :8081
+```
+
+To play: open the game, enter a callsign under **MULTIPLAYER**, hit
+**CREATE MATCH**, and share the 4-letter code plus your machine's IP
+(e.g. `http://192.168.1.20:5173` in dev, `:8081` in production — everyone
+must load the game from the host machine's address, not `localhost`).
+Friends type the code and hit **JOIN MATCH**. The match's level is fixed at
+creation; joiners load it automatically, campaign locks don't apply.
+
+In a match:
+
+- Every player has their **name floating overhead** and a **glowing identity
+  ring** at their feet in their own colour, so you always know who is who.
+  Both clip behind cover — no wallhacks.
+- **Hold `Tab`** for the live scoreboard; kills also stream through the feed
+  under the score readout.
+- Death redeploys you automatically after 3 seconds at a fresh spawn.
+- **All-time leaderboard** (wins / eliminations / downs per callsign) persists
+  in `server/leaderboard.json` and is browsable from the start screen.
+
+### Deploying multiplayer
+
+The Vercel/Firebase deploy only serves static files, and the relay is a
+persistent WebSocket process — it can't run there. Deployed setup is two
+pieces:
+
+1. **Game on Vercel** — push as usual, nothing changes. Single-player works
+   with no relay at all.
+2. **Relay on a Node host** (Render / Railway / Fly.io free tier, or any VPS):
+   deploy this same repo with start command `node server/index.mjs`. It
+   respects `PORT`, and those hosts terminate TLS for you — which matters,
+   because an HTTPS page may only open `wss://` sockets.
+
+Then tell the game where the relay lives: set **`VITE_MP_SERVER`** to the
+relay's domain (e.g. `obsidian-relay.onrender.com`) in Vercel's environment
+variables and redeploy. `?server=host:port` in the URL still overrides it for
+ad-hoc testing, and with neither set the client assumes the relay is on the
+same host as the page (LAN dev, or the all-in-one `npm run play`).
+
+Caveats worth knowing: `server/leaderboard.json` lives on the relay's disk, so
+on hosts with an ephemeral filesystem the all-time leaderboard resets on every
+redeploy — attach a small persistent volume if you care. And the relay is one
+process holding rooms in memory: perfect for friends-and-coworkers scale, not
+built to scale horizontally.
+
+Architecture, for the curious: the server (`server/index.mjs`) is a relay,
+not a simulation — each client owns its own player (movement and health), the
+shooter's client owns its hitscan, and the server owns the social truth: the
+roster, the scores, and when the match ends. Remote players render 120 ms in
+the past through snapshot interpolation (`src/net/`), so movement stays smooth
+at real-network jitter.
+
 ## Levels
 
 | id | Name | |

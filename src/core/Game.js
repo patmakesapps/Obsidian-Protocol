@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONFIG, PALETTE } from '../config.js';
+import { CONFIG, PALETTE, WEAPONS } from '../config.js';
 import { Physics } from './Physics.js';
 import { Input } from './Input.js';
 import { Assets } from './Assets.js';
@@ -19,12 +19,17 @@ import { Enemy, Ally, Drone } from '../entities/Combatants.js';
 import { Pickups } from '../items/Pickups.js';
 import { Objectives } from '../game/Objectives.js';
 import { HUD, SCORE } from '../ui/HUD.js';
+import { Netplay } from '../net/Netplay.js';
 import { makeRandom } from './noise.js';
 
 export class Game {
-  constructor(canvas) {
+  constructor(canvas, { netSession = null } = {}) {
     this.canvas = canvas;
     this.CONFIG = CONFIG;
+    // Multiplayer session handed in by the shell: { client, session }. When
+    // set, the world loads with no AI at all — matches are player-vs-player.
+    this.netSession = netSession;
+    this.mp = !!netSession;
     this.running = false;
     this.started = false;
     this.elapsed = 0;
@@ -143,20 +148,11 @@ export class Game {
     this.loadout = new Loadout({
       hud: this.hud,
       audio: this.audio,
-      startingIds: CONFIG.player.loadout,
+      // PvP: both rifles from the start — there are no ammo drops from AI.
+      startingIds: this.mp ? Object.keys(WEAPONS) : CONFIG.player.loadout,
       createWeapon: (def) => this._createWeapon(def),
     });
     await this.loadout.init();
-
-    this.pickups = new Pickups({
-      scene: this.scene,
-      level: this.level,
-      player: this.player,
-      loadout: this.loadout,
-      hud: this.hud,
-      audio: this.audio,
-      assets: this.assets,
-    });
 
     this.world = {
       player: this.player,
@@ -164,22 +160,47 @@ export class Game {
       allies: this.allies,
     };
 
-    onProgress('SPAWNING SQUAD');
-    for (let i = 0; i < CONFIG.ally.count; i++) await this._spawnAlly(i);
+    if (this.mp) {
+      // Multiplayer is players-only: no pickups, no squads, no hostiles, no
+      // campaign objectives. Scatter in at a random spawn so a lobby doesn't
+      // stack everyone on the same point.
+      onProgress('LINKING OPERATIVES');
+      const at = this.level.randomSpawnPoint(Math.random);
+      if (at) this.player.respawn(at.clone().setY(this.level.heightAt(at.x, at.z) + 0.5));
 
-    onProgress('DEPLOYING HOSTILES');
-    await this._spawnSquads(CONFIG.enemy.count);
-    for (let i = 0; i < CONFIG.drone.count; i++) await this._spawnDrone();
+      this.netplay = new Netplay({
+        game: this,
+        client: this.netSession.client,
+        session: this.netSession.session,
+      });
+    } else {
+      this.pickups = new Pickups({
+        scene: this.scene,
+        level: this.level,
+        player: this.player,
+        loadout: this.loadout,
+        hud: this.hud,
+        audio: this.audio,
+        assets: this.assets,
+      });
 
-    this.objectives = new Objectives({
-      scene: this.scene,
-      level: this.level,
-      player: this.player,
-      hud: this.hud,
-      audio: this.audio,
-      game: this,
-    });
-    this.objectives.start();
+      onProgress('SPAWNING SQUAD');
+      for (let i = 0; i < CONFIG.ally.count; i++) await this._spawnAlly(i);
+
+      onProgress('DEPLOYING HOSTILES');
+      await this._spawnSquads(CONFIG.enemy.count);
+      for (let i = 0; i < CONFIG.drone.count; i++) await this._spawnDrone();
+
+      this.objectives = new Objectives({
+        scene: this.scene,
+        level: this.level,
+        player: this.player,
+        hud: this.hud,
+        audio: this.audio,
+        game: this,
+      });
+      this.objectives.start();
+    }
 
     // Second sweep for everything built procedurally during load — level
     // geometry, cover, street furniture — which never went through Assets.
@@ -466,8 +487,9 @@ export class Game {
     this.hud.setScope(this.player.aimBlend);
     this.hud.updateDamageNumbers(dt, this.camera);
     this.projectiles.update(dt);
-    this.pickups.update(dt);
-    this.objectives.update(dt);
+    this.pickups?.update(dt);
+    this.objectives?.update(dt);
+    this.netplay?.update(dt);
 
     for (const enemy of this.enemies) enemy.update(dt);
     for (const ally of this.allies) ally.update(dt);
@@ -475,7 +497,8 @@ export class Game {
     this._cullAndRespawn();
     this._trackShadows();
 
-    if (!this.player.alive && this.input.wasPressed('Enter')) {
+    // Campaign redeploy is manual; multiplayer redeploys itself (Netplay).
+    if (!this.netplay && !this.player.alive && this.input.wasPressed('Enter')) {
       this.player.respawn();
       this.input.requestLock();
     }
@@ -577,6 +600,7 @@ export class Game {
 
   dispose() {
     this.running = false;
+    this.netplay?.dispose();
     window.removeEventListener('resize', this._onResize);
     // The music loop outlives the frame loop otherwise — two levels in, two
     // soundtracks are playing on top of each other.

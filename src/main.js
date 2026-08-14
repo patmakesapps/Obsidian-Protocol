@@ -1,6 +1,7 @@
 import { Game } from './core/Game.js';
 import { levelList, resolveLevel } from './world/levels.js';
 import { isUnlocked, isComplete } from './game/progress.js';
+import { NetClient } from './net/NetClient.js';
 
 const canvas = document.getElementById('viewport');
 const overlay = document.getElementById('overlay');
@@ -11,6 +12,9 @@ const startButton = document.getElementById('start-button');
 function goToLevel(id) {
   const url = new URL(window.location.href);
   url.searchParams.set('level', id);
+  // Switching level is leaving the match — the match's level is fixed.
+  url.searchParams.delete('mp');
+  url.searchParams.delete('room');
   window.location.assign(url);
 }
 
@@ -56,14 +60,176 @@ function buildLevelSelect(currentId) {
   select.classList.remove('hidden');
 }
 
+// ----------------------------------------------------------- multiplayer
+
+/** ?mp=1&room=CODE&name=CALLSIGN — set by the lobby, consumed on the next load. */
+function mpParams() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    active: p.get('mp') === '1' && !!p.get('room'),
+    room: (p.get('room') ?? '').toUpperCase(),
+    name: p.get('name') ?? '',
+  };
+}
+
+/** The relay's HTTP side (leaderboard), derived from its websocket URL. */
+function serverHttpUrl() {
+  return NetClient.defaultUrl().replace(/^ws/, 'http');
+}
+
+function setMpStatus(text, kind = '') {
+  const el = document.getElementById('mp-status');
+  if (!el) return;
+  el.textContent = text;
+  el.className = kind;
+}
+
+/**
+ * Navigates into a match. A reload is already the level-change mechanism, so
+ * it's the match-join mechanism too — the room code survives in the URL and
+ * the socket reconnects on the other side.
+ */
+function goToMatch(levelId, code, name) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('level', levelId);
+  url.searchParams.set('mp', '1');
+  url.searchParams.set('room', code);
+  url.searchParams.set('name', name);
+  window.location.assign(url);
+}
+
+/** Lobby controls on the start screen: create, join, leaderboard. */
+function setupMultiplayerMenu(activeLevelId) {
+  const nameInput = document.getElementById('mp-name');
+  const codeInput = document.getElementById('mp-code');
+  const createBtn = document.getElementById('mp-create');
+  const joinBtn = document.getElementById('mp-join');
+  const boardToggle = document.getElementById('mp-board-toggle');
+  const boardPanel = document.getElementById('mp-leaderboard');
+  const boardRows = document.getElementById('mp-board-rows');
+  if (!nameInput || !createBtn) return;
+
+  nameInput.value = localStorage.getItem('op-callsign') ?? '';
+
+  const callsign = () => {
+    const name = nameInput.value.trim().toUpperCase() || 'OPERATIVE';
+    localStorage.setItem('op-callsign', name);
+    return name;
+  };
+
+  const busy = (on) => {
+    createBtn.disabled = on;
+    joinBtn.disabled = on;
+  };
+
+  createBtn.addEventListener('click', async () => {
+    busy(true);
+    setMpStatus('CONTACTING SERVER…');
+    try {
+      const client = new NetClient(NetClient.defaultUrl());
+      await client.connect();
+      const reply = await client.request({ t: 'create', level: activeLevelId }, ['created', 'error']);
+      client.close();
+      if (reply.t === 'error') throw new Error(reply.message);
+      goToMatch(activeLevelId, reply.code, callsign());
+    } catch (err) {
+      setMpStatus(err.message ?? 'SERVER UNREACHABLE', 'error');
+      busy(false);
+    }
+  });
+
+  joinBtn.addEventListener('click', async () => {
+    const code = codeInput.value.trim().toUpperCase();
+    if (code.length !== 4) return setMpStatus('ENTER THE 4-LETTER MATCH CODE', 'error');
+    busy(true);
+    setMpStatus('LOCATING MATCH…');
+    try {
+      const client = new NetClient(NetClient.defaultUrl());
+      await client.connect();
+      // Peek first so we load the match's level BEFORE joining — joining on
+      // the wrong level would put players in different worlds.
+      const reply = await client.request({ t: 'peek', code }, ['peeked', 'error']);
+      client.close();
+      if (reply.t === 'error') throw new Error(reply.message);
+      if (reply.players >= reply.max) throw new Error('MATCH FULL');
+      goToMatch(reply.level, code, callsign());
+    } catch (err) {
+      setMpStatus(err.message ?? 'SERVER UNREACHABLE', 'error');
+      busy(false);
+    }
+  });
+
+  boardToggle?.addEventListener('click', async () => {
+    boardPanel.classList.toggle('hidden');
+    if (boardPanel.classList.contains('hidden')) return;
+    boardRows.textContent = 'FETCHING…';
+    try {
+      const res = await fetch(`${serverHttpUrl()}/api/leaderboard`);
+      const { rows } = await res.json();
+      if (!rows.length) {
+        boardRows.textContent = 'NO MATCHES RECORDED YET';
+        return;
+      }
+      boardRows.innerHTML =
+        `<div class="board-row head"><span class="b-rank">#</span><span class="b-name">OPERATIVE</span>` +
+        `<span class="b-stat">WINS</span><span class="b-stat">ELIMS</span><span class="b-stat">DOWNS</span></div>` +
+        rows
+          .map(
+            (r, i) =>
+              `<div class="board-row"><span class="b-rank">${i + 1}</span><span class="b-name">${r.name}</span>` +
+              `<span class="b-stat">${r.wins}</span><span class="b-stat">${r.kills}</span><span class="b-stat">${r.deaths}</span></div>`,
+          )
+          .join('');
+    } catch {
+      boardRows.textContent = 'LEADERBOARD UNAVAILABLE — IS THE SERVER RUNNING?';
+    }
+  });
+}
+
+/** Connects and joins the room named in the URL. Returns Game's netSession. */
+async function joinFromUrl(mp, activeLevelId) {
+  const client = new NetClient(NetClient.defaultUrl());
+  await client.connect();
+  const session = await client.request(
+    { t: 'join', code: mp.room, name: mp.name || 'OPERATIVE' },
+    ['joined', 'error'],
+  );
+  if (session.t === 'error') {
+    client.close();
+    throw new Error(session.message);
+  }
+  // The room's level always wins. Normally the lobby already put it in the
+  // URL; a hand-typed link gets bounced through one corrective reload.
+  if (session.level !== activeLevelId) {
+    goToMatch(session.level, mp.room, mp.name);
+    throw new Error('SWITCHING LEVEL');
+  }
+  return { client, session };
+}
+
 async function boot() {
   const active = resolveLevel();
+  const mp = mpParams();
 
   // Shown before loading starts, so the picker is usable while the world builds
   // and a mis-click doesn't mean waiting out a load first.
   buildLevelSelect(active.id);
+  setupMultiplayerMenu(active.id);
 
-  const game = new Game(canvas);
+  let netSession = null;
+  if (mp.active) {
+    status.textContent = 'JOINING MATCH…';
+    try {
+      netSession = await joinFromUrl(mp, active.id);
+    } catch (err) {
+      if (err.message === 'SWITCHING LEVEL') return; // corrective reload underway
+      console.error(err);
+      setMpStatus(err.message ?? 'JOIN FAILED', 'error');
+      status.textContent = 'MATCH UNAVAILABLE — SOLO LOAD';
+    }
+  }
+
+  const game = new Game(canvas, { netSession });
   window.game = game; // handy for tweaking values from the console
 
   try {
@@ -76,7 +242,13 @@ async function boot() {
     return;
   }
 
-  status.textContent = 'ALL SYSTEMS NOMINAL';
+  if (netSession) {
+    const others = netSession.session.players.length;
+    status.textContent = `MATCH ${netSession.session.code} · ${others + 1} OPERATIVE${others ? 'S' : ''} · SHARE THE CODE`;
+    setMpStatus(`IN MATCH ${netSession.session.code} — SHARE THE CODE TO INVITE`, 'good');
+  } else {
+    status.textContent = 'ALL SYSTEMS NOMINAL';
+  }
   startButton.disabled = false;
 
   const tag = document.getElementById('overlay-tag');

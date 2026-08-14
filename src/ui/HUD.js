@@ -319,18 +319,115 @@ export class HUD {
     }
   }
 
-  showDeath() {
+  showDeath(subtitle = null) {
     if (this.deathScreen) return;
     const el = document.createElement('div');
     el.id = 'death-screen';
-    el.innerHTML = '<div><h2>SIGNAL LOST</h2><p>PRESS <kbd>ENTER</kbd> TO REDEPLOY</p></div>';
+    const sub = subtitle ?? 'PRESS <kbd>ENTER</kbd> TO REDEPLOY';
+    el.innerHTML = `<div><h2>SIGNAL LOST</h2><p>${sub}</p></div>`;
     document.body.appendChild(el);
     this.deathScreen = el;
-    document.exitPointerLock?.();
+    // Multiplayer redeploys on its own — keep the cursor captured so the
+    // player comes back shooting rather than having to click back in.
+    if (!subtitle) document.exitPointerLock?.();
   }
 
   hideDeath() {
     this.deathScreen?.remove();
     this.deathScreen = null;
+  }
+
+  // ------------------------------------------------------------ multiplayer
+
+  static _cssColor(hex) {
+    return `#${(hex ?? 0xffffff).toString(16).padStart(6, '0')}`;
+  }
+
+  /** One line in the top-right feed: KILLER ▸ VICTIM. */
+  showKillFeed({ killerName, killerColor, victimName, victimColor, headshot }) {
+    const feed = document.getElementById('kill-feed');
+    if (!feed) return;
+    const el = document.createElement('div');
+    el.className = 'feed-line';
+    const killer = killerName
+      ? `<span style="color:${HUD._cssColor(killerColor)}">${killerName}</span>`
+      : '<span class="feed-env">MISADVENTURE</span>';
+    el.innerHTML = `${killer} <i>${headshot ? '◎' : '▸'}</i> <span style="color:${HUD._cssColor(victimColor)}">${victimName}</span>`;
+    feed.prepend(el);
+    while (feed.children.length > 6) feed.lastChild.remove();
+    setTimeout(() => el.classList.add('out'), 4600);
+    setTimeout(() => el.remove(), 5200);
+  }
+
+  /** Latest match standings; re-renders the board if it's open. */
+  setScores(rows, myId, limit) {
+    this._scoreRows = rows;
+    this._scoreLimit = limit;
+    this._myNetId = myId;
+    if (this._scoreboardOpen) this._renderScoreboard();
+  }
+
+  setScoreboardVisible(visible, rows, myId, limit) {
+    if (rows) this.setScores(rows, myId, limit);
+    this._scoreboardOpen = visible;
+    const board = document.getElementById('scoreboard');
+    if (!board) return;
+    board.classList.toggle('hidden', !visible);
+    if (visible) this._renderScoreboard();
+  }
+
+  _renderScoreboard() {
+    const board = document.getElementById('scoreboard');
+    if (!board) return;
+    board.innerHTML = `
+      <div class="sb-head">FREE-FOR-ALL · FIRST TO ${this._scoreLimit ?? 20}</div>
+      ${HUD._scoreTable(this._scoreRows ?? [], this._myNetId)}`;
+  }
+
+  static _scoreTable(rows, myId) {
+    const body = rows
+      .map(
+        (r, i) => `
+        <tr class="${r.id === myId ? 'me' : ''}">
+          <td class="sb-rank">${i + 1}</td>
+          <td class="sb-name" style="color:${HUD._cssColor(r.color)}">${r.name}</td>
+          <td class="sb-num">${r.kills}</td>
+          <td class="sb-num">${r.deaths}</td>
+        </tr>`,
+      )
+      .join('');
+    return `<table class="sb-table">
+      <thead><tr><th></th><th>OPERATIVE</th><th>ELIMS</th><th>DOWNS</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+  }
+
+  /** End-of-match overlay with the final standings and a restart countdown. */
+  showMatchEnd({ winnerName, winnerColor, won, rows, restartIn, myId }) {
+    this.hideMatchEnd();
+    const el = document.createElement('div');
+    el.id = 'match-end';
+    el.innerHTML = `
+      <div class="me-inner">
+        <div class="me-result ${won ? 'won' : ''}">${won ? 'VICTORY' : 'MATCH OVER'}</div>
+        <div class="me-winner"><span style="color:${HUD._cssColor(winnerColor)}">${winnerName}</span> TAKES THE MATCH</div>
+        ${HUD._scoreTable(rows ?? [], myId)}
+        <div class="me-countdown">NEXT MATCH IN <b>${restartIn}</b>s</div>
+      </div>`;
+    document.body.appendChild(el);
+    this.matchEndScreen = el;
+
+    let remaining = restartIn;
+    const counter = el.querySelector('.me-countdown b');
+    this._matchEndTimer = setInterval(() => {
+      remaining = Math.max(0, remaining - 1);
+      if (counter) counter.textContent = String(remaining);
+    }, 1000);
+  }
+
+  hideMatchEnd() {
+    clearInterval(this._matchEndTimer);
+    this.matchEndScreen?.remove();
+    this.matchEndScreen = null;
   }
 }
