@@ -2,6 +2,8 @@ import { Game } from './core/Game.js';
 import { levelList, resolveLevel } from './world/levels.js';
 import { isUnlocked, isComplete } from './game/progress.js';
 import { NetClient } from './net/NetClient.js';
+import { CHARACTERS } from './net/RemotePlayers.js';
+import { CharacterPreview } from './ui/CharacterPreview.js';
 
 const canvas = document.getElementById('viewport');
 const overlay = document.getElementById('overlay');
@@ -136,46 +138,73 @@ function setupMultiplayerMenu() {
 
   nameInput.value = localStorage.getItem('op-callsign') ?? '';
 
-  // Character picker — cosmetic, remembered per browser.
-  const charButtons = [...document.querySelectorAll('#char-options .pick-option')];
-  const pickChar = (char) => {
-    localStorage.setItem('op-character', char);
-    for (const b of charButtons) b.classList.toggle('active', b.dataset.char === char);
-  };
-  for (const b of charButtons) b.addEventListener('click', () => pickChar(b.dataset.char));
-  pickChar(savedCharacter());
-
-  // Arena picker — multiplayer can use any level, locks don't apply. Defaults
-  // to The Pit, the purpose-built arena.
-  let mpLevel = localStorage.getItem('op-mp-level') ?? 'pit';
-  const levelHolder = document.getElementById('mp-level-options');
-  if (levelHolder) {
-    for (const level of levelList()) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'pick-option';
-      b.textContent = level.name;
-      b.dataset.level = level.id;
-      b.addEventListener('click', () => {
-        mpLevel = level.id;
-        localStorage.setItem('op-mp-level', mpLevel);
-        for (const o of levelHolder.children) o.classList.toggle('active', o === b);
-      });
-      levelHolder.appendChild(b);
+  // Character carousel — a live 3D model of each pick, arrows to cycle.
+  const charList = Object.entries(CHARACTERS).map(([id, def]) => ({
+    id,
+    label: def.label,
+    model: def.model(),
+    height: def.modelHeight ?? 1.72,
+    lift: def.hover ? 0.55 : 0, // drones preview hovering over the dais
+  }));
+  const charCanvas = document.getElementById('char-canvas');
+  const charName = document.getElementById('char-name');
+  const charDots = document.getElementById('char-dots');
+  let preview = null;
+  if (charCanvas) {
+    for (let i = 0; i < charList.length; i++) {
+      const dot = document.createElement('i');
+      dot.className = 'char-dot';
+      charDots?.appendChild(dot);
     }
-    for (const o of levelHolder.children) o.classList.toggle('active', o.dataset.level === mpLevel);
+    const syncChar = (char) => {
+      localStorage.setItem('op-character', char.id);
+      if (charName) charName.textContent = char.label;
+      [...(charDots?.children ?? [])].forEach((d, i) =>
+        d.classList.toggle('active', charList[i].id === char.id),
+      );
+    };
+    preview = new CharacterPreview(charCanvas, charList);
+    preview.onChange = syncChar;
+    preview.setCharById(savedCharacter());
+    syncChar(preview.current);
+    document.getElementById('char-prev')?.addEventListener('click', () => preview.prev());
+    document.getElementById('char-next')?.addEventListener('click', () => preview.next());
   }
 
-  // Hostiles picker — whether AI joins the deathmatch.
-  let bots = localStorage.getItem('op-mp-bots') === '1';
-  const botButtons = [...document.querySelectorAll('#bots-options .pick-option')];
-  const pickBots = (on) => {
-    bots = on;
-    localStorage.setItem('op-mp-bots', on ? '1' : '0');
-    for (const b of botButtons) b.classList.toggle('active', (b.dataset.bots === '1') === on);
+  // Arena cycler — multiplayer can use any level, locks don't apply.
+  const arenas = levelList();
+  let arenaIndex = Math.max(0, arenas.findIndex((l) => l.id === (localStorage.getItem('op-mp-level') ?? 'pit')));
+  const arenaName = document.getElementById('arena-name');
+  const syncArena = () => {
+    if (arenaName) arenaName.textContent = arenas[arenaIndex].name;
+    localStorage.setItem('op-mp-level', arenas[arenaIndex].id);
   };
-  for (const b of botButtons) b.addEventListener('click', () => pickBots(b.dataset.bots === '1'));
-  pickBots(bots);
+  syncArena();
+  document.getElementById('arena-prev')?.addEventListener('click', () => {
+    arenaIndex = (arenaIndex + arenas.length - 1) % arenas.length;
+    syncArena();
+  });
+  document.getElementById('arena-next')?.addEventListener('click', () => {
+    arenaIndex = (arenaIndex + 1) % arenas.length;
+    syncArena();
+  });
+  const mpLevelId = () => arenas[arenaIndex].id;
+
+  // Hostiles switch — whether AI joins the deathmatch.
+  let bots = localStorage.getItem('op-mp-bots') === '1';
+  const botsSwitch = document.getElementById('bots-switch');
+  const syncBots = () => {
+    localStorage.setItem('op-mp-bots', bots ? '1' : '0');
+    botsSwitch?.classList.toggle('on', bots);
+    botsSwitch?.setAttribute('aria-pressed', String(bots));
+    const label = botsSwitch?.querySelector('span');
+    if (label) label.textContent = bots ? 'ON' : 'OFF';
+  };
+  syncBots();
+  botsSwitch?.addEventListener('click', () => {
+    bots = !bots;
+    syncBots();
+  });
 
   const callsign = () => {
     const name = nameInput.value.trim().toUpperCase() || 'OPERATIVE';
@@ -194,10 +223,10 @@ function setupMultiplayerMenu() {
     try {
       const client = new NetClient(NetClient.defaultUrl());
       await client.connect();
-      const reply = await client.request({ t: 'create', level: mpLevel, bots }, ['created', 'error']);
+      const reply = await client.request({ t: 'create', level: mpLevelId(), bots }, ['created', 'error']);
       client.close();
       if (reply.t === 'error') throw new Error(reply.message);
-      goToMatch(mpLevel, reply.code, callsign());
+      goToMatch(mpLevelId(), reply.code, callsign());
     } catch (err) {
       setMpStatus(err.message ?? 'SERVER UNREACHABLE', 'error');
       busy(false);

@@ -1437,3 +1437,237 @@ kbd {
   vertical-align: -1px;
   border: 1px solid rgba(13, 13, 19, 0.4);
 }
+
+/* ----------------------------------------------- multiplayer lobby layout */
+
+#mp-layout {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 42px;
+  flex-wrap: wrap;
+  pointer-events: auto;
+}
+
+/* Character carousel */
+#char-select {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#char-stage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#char-canvas {
+  width: 240px;
+  height: 300px;
+  display: block;
+}
+
+.car-arrow {
+  font-family: inherit;
+  font-size: 15px;
+  width: 38px;
+  height: 46px;
+  color: rgba(214, 205, 245, 0.6);
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(196, 166, 255, 0.22);
+  cursor: pointer;
+  clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.car-arrow:hover {
+  color: #f0eaff;
+  border-color: rgba(196, 166, 255, 0.6);
+  background: rgba(139, 92, 246, 0.2);
+}
+
+.car-arrow.small {
+  width: 30px;
+  height: 32px;
+  font-size: 11px;
+}
+
+#char-name {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: #f0eaff;
+  text-shadow: 0 0 16px rgba(196, 166, 255, 0.55);
+}
+
+#char-dots {
+  display: flex;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.char-dot {
+  width: 7px;
+  height: 7px;
+  background: rgba(196, 166, 255, 0.22);
+  transform: rotate(45deg);
+  transition: background 0.15s;
+}
+
+.char-dot.active {
+  background: #c4a6ff;
+}
+
+/* Match settings card */
+#mp-form {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 22px;
+  text-align: left;
+  background: rgba(13, 10, 26, 0.5);
+  border: 1px solid rgba(196, 166, 255, 0.18);
+  border-top: 2px solid rgba(196, 166, 255, 0.55);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-row label {
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: rgba(214, 205, 245, 0.45);
+}
+
+.form-row input {
+  width: 100%;
+}
+
+.cycle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cycle span {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #f0eaff;
+  white-space: nowrap;
+}
+
+/* Hostiles switch */
+.switch {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px 5px 5px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: rgba(214, 205, 245, 0.6);
+  background: rgba(13, 13, 19, 0.6);
+  border: 1px solid rgba(196, 166, 255, 0.25);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.switch i {
+  display: block;
+  width: 34px;
+  height: 16px;
+  position: relative;
+  background: rgba(196, 166, 255, 0.14);
+  transition: background 0.15s;
+}
+
+.switch i::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: rgba(214, 205, 245, 0.55);
+  transition: left 0.15s, background 0.15s;
+}
+
+.switch.on {
+  color: #6effc4;
+  border-color: rgba(110, 255, 196, 0.5);
+}
+
+.switch.on i {
+  background: rgba(110, 255, 196, 0.2);
+}
+
+.switch.on i::after {
+  left: 20px;
+  background: #6effc4;
+}
+
+/* Actions */
+.mp-btn.primary {
+  width: 100%;
+  padding: 13px 0;
+  font-size: 12px;
+  color: #0b0616;
+  background: linear-gradient(135deg, #c4a6ff, #8b5cf6);
+  border-color: #d9c6ff;
+}
+
+.mp-btn.primary:hover {
+  color: #0b0616;
+  background: linear-gradient(135deg, #d9c6ff, #a07df8);
+}
+
+.join-inline {
+  display: flex;
+  gap: 8px;
+}
+
+.join-inline input {
+  width: 90px !important;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.join-inline .mp-btn {
+  flex: 1;
+}
+
+.link-btn {
+  align-self: center;
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: rgba(214, 205, 245, 0.45);
+  background: none;
+  border: none;
+  border-bottom: 1px dashed rgba(196, 166, 255, 0.3);
+  padding: 2px 0 3px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.link-btn:hover {
+  color: #c4a6ff;
+}
+
+#mp-leaderboard {
+  margin-top: 20px;
+}
